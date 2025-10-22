@@ -1,0 +1,98 @@
+version: '3.8'
+
+# Docker Compose для NAS с образами из Docker Hub
+# Автор: Sergey Bakunin (deone37)
+
+services:
+  # Backend service (FastAPI)
+  backend:
+    image: deone37/devsecops-backend:latest
+    container_name: devsecops-backend
+    hostname: devsecops-backend
+
+    # Порты - используем 8090 для соответствия Reverse Proxy
+    ports:
+      - "${BACKEND_PORT:-8090}:8000"
+
+    # Переменные окружения
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - TZ=${TZ:-Europe/Moscow}
+
+    # Сеть
+    networks:
+      - devsecops-network
+
+    # Политика перезапуска
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Ограничения ресурсов (только память, без CPU)
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-512M}
+    mem_reservation: 256M
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max_size: "10m"
+        max_file: "3"
+
+  # Frontend service (React + Nginx)
+  frontend:
+    image: deone37/devsecops-frontend:latest
+    container_name: devsecops-frontend
+    hostname: devsecops-frontend
+
+    # Порты
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+    # Переменные окружения
+    environment:
+      - REACT_APP_API_URL=${API_URL:-https://dso.deone37.synology.me}
+      - TZ=${TZ:-Europe/Moscow}
+
+    # Зависимости
+    depends_on:
+      - backend
+
+    # Сеть
+    networks:
+      - devsecops-network
+
+    # Политика перезапуска
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Ограничения ресурсов (только память, без CPU)
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-256M}
+    mem_reservation: 128M
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max_size: "10m"
+        max_file: "3"
+
+# Сеть
+networks:
+  devsecops-network:
+    driver: bridge
+    name: devsecops-network

@@ -11,6 +11,19 @@
 
 ## 🚀 Быстрый старт
 
+### Вариант 1: Docker (рекомендуется)
+
+```bash
+# Одна команда для запуска всего приложения
+docker-compose up -d
+```
+
+Откройте http://localhost:3000
+
+📖 **Подробнее:** [DOCKER_QUICK_START.md](DOCKER_QUICK_START.md)
+
+### Вариант 2: Локальный запуск
+
 ```bash
 # Терминал 1 - Backend
 cd backend/app
@@ -268,21 +281,48 @@ npm test
 
 ## 🐳 Docker
 
-### Запуск через Docker:
+### Быстрый запуск через Docker Compose (рекомендуется):
+
+```bash
+# Сборка и запуск
+docker-compose up -d
+
+# Просмотр логов
+docker-compose logs -f
+
+# Остановка
+docker-compose down
+```
+
+**Что запускается:**
+- ✅ Backend (FastAPI) на порту 8000
+- ✅ Frontend (React + Nginx) на порту 3000
+- ✅ Автоматическая сеть между сервисами
+- ✅ Health checks для мониторинга
+
+### Через VS Code Docker Extension:
+
+1. Откройте `docker-compose.yml`
+2. Щёлкните правой кнопкой → **"Compose Up"**
+3. Готово! Контейнеры запущены
+
+### Ручная сборка образов:
 
 **Backend:**
 ```bash
 cd backend
-docker build -t devsecops-tools-backend .
-docker run -p 8000:8000 devsecops-tools-backend
+docker build -t devsecops-tools-backend:1.0.0 .
+docker run -d -p 8000:8000 devsecops-tools-backend:1.0.0
 ```
 
 **Frontend:**
 ```bash
 cd frontend
-docker build -t devsecops-tools-frontend .
-docker run -p 3000:3000 devsecops-tools-frontend
+docker build -t devsecops-tools-frontend:1.0.0 .
+docker run -d -p 3000:80 devsecops-tools-frontend:1.0.0
 ```
+
+📖 **Подробная документация:** [DOCKER_GUIDE.md](DOCKER_GUIDE.md)
 
 ---
 
