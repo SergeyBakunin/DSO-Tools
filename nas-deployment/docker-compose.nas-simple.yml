@@ -1,0 +1,98 @@
+version: '3.8'
+
+# Docker Compose конфигурация для NAS (Synology/QNAP)
+# Упрощенная версия БЕЗ лимитов CPU (только memory)
+
+services:
+  # Backend service (FastAPI)
+  backend:
+    image: devsecops-tools-backend:1.0.0
+    container_name: devsecops-backend
+    hostname: devsecops-backend
+
+    # Порты - ВАЖНО: используем 8090 для соответствия Reverse Proxy
+    ports:
+      - "${BACKEND_PORT:-8090}:8000"
+
+    # Переменные окружения
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=info
+      - TZ=Europe/Moscow
+
+    # Сеть
+    networks:
+      - devsecops-network
+
+    # Политика перезапуска
+    restart: unless-stopped
+
+    # Health check (простая проверка процесса)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Только лимиты памяти (CPU лимиты убраны для совместимости)
+    mem_limit: 512M
+    mem_reservation: 256M
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Frontend service (React + Nginx)
+  frontend:
+    image: devsecops-tools-frontend:1.0.0
+    container_name: devsecops-frontend
+    hostname: devsecops-frontend
+
+    # Порты
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+    # Переменные окружения
+    environment:
+      - REACT_APP_API_URL=${API_URL:-https://dso.deone37.synology.me}
+      - TZ=${TZ:-Europe/Moscow}
+
+    # Зависимости
+    depends_on:
+      - backend
+
+    # Сеть
+    networks:
+      - devsecops-network
+
+    # Политика перезапуска
+    restart: unless-stopped
+
+    # Health check (проверка главной страницы)
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    # Только лимиты памяти (CPU лимиты убраны для совместимости)
+    mem_limit: 256M
+    mem_reservation: 128M
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Сеть
+networks:
+  devsecops-network:
+    driver: bridge
+    name: devsecops-network

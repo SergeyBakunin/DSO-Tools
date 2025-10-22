@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import './SBOMMigrate.css';
 
 const SBOMMigrate = ({ onBack }) => {
   const [sourceFile, setSourceFile] = useState(null);
   const [targetFile, setTargetFile] = useState(null);
   const [exportFormat, setExportFormat] = useState('xlsx');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [migrationLog, setMigrationLog] = useState(null);
   const [error, setError] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
   const handleSourceFileChange = (e) => {
     setSourceFile(e.target.files[0]);
-    setResult(null);
+    setMigrationLog(null);
     setError(null);
   };
 
   const handleTargetFileChange = (e) => {
     setTargetFile(e.target.files[0]);
-    setResult(null);
+    setMigrationLog(null);
     setError(null);
   };
 
@@ -31,7 +32,7 @@ const SBOMMigrate = ({ onBack }) => {
 
     setLoading(true);
     setError(null);
-    setResult(null);
+    setMigrationLog(null);
 
     const formData = new FormData();
     formData.append('source_file', sourceFile);
@@ -44,7 +45,7 @@ const SBOMMigrate = ({ onBack }) => {
         },
       });
 
-      setResult(response.data);
+      setMigrationLog(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Произошла ошибка при миграции');
     } finally {
@@ -82,12 +83,148 @@ const SBOMMigrate = ({ onBack }) => {
       link.click();
       link.remove();
 
-      setResult({ status: 'success', message: 'Файл успешно экспортирован' });
+      // После успешного экспорта показываем лог
+      handleMigrate();
     } catch (err) {
       setError(err.response?.data?.detail || 'Произошла ошибка при экспорте');
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderMigrationLog = () => {
+    if (!migrationLog) return null;
+
+    const { migration_stats, source_stats, target_stats, project_mismatches, warnings } = migrationLog;
+
+    return (
+      <div className="migration-log">
+        <div className="log-header">
+          <h3>📊 Отчет о миграции</h3>
+          <p className="timestamp">
+            {new Date(migrationLog.timestamp).toLocaleString('ru-RU')}
+          </p>
+        </div>
+
+        {/* Основная статистика */}
+        <div className="stats-grid">
+          <div className="stat-card success">
+            <div className="stat-value">{migration_stats.comments_migrated}</div>
+            <div className="stat-label">Комментариев перенесено</div>
+          </div>
+
+          <div className="stat-card info">
+            <div className="stat-value">{migration_stats.comments_available_in_source}</div>
+            <div className="stat-label">Доступно в исходном файле</div>
+          </div>
+
+          <div className="stat-card primary">
+            <div className="stat-value">{migration_stats.migration_rate_percent}%</div>
+            <div className="stat-label">Процент переноса</div>
+          </div>
+
+          <div className="stat-card warning">
+            <div className="stat-value">{migration_stats.new_cves_in_target}</div>
+            <div className="stat-label">Новых CVE в целевом файле</div>
+          </div>
+        </div>
+
+        {/* Проекты */}
+        <div className="projects-section">
+          <h4>🗂️ Статистика по проектам</h4>
+          <div className="project-stats">
+            <div className="project-stat">
+              <span className="stat-icon">📂</span>
+              <span>Уникальных проектов в старом файле: <strong>{migration_stats.unique_projects_in_source}</strong></span>
+            </div>
+            <div className="project-stat">
+              <span className="stat-icon">📁</span>
+              <span>Уникальных проектов в новом файле: <strong>{migration_stats.unique_projects_in_target}</strong></span>
+            </div>
+            <div className="project-stat">
+              <span className="stat-icon">✅</span>
+              <span>Общих проектов: <strong>{migration_stats.common_projects}</strong></span>
+            </div>
+            {migration_stats.projects_only_in_source > 0 && (
+              <div className="project-stat warning">
+                <span className="stat-icon">⚠️</span>
+                <span>Проектов только в старом файле: <strong>{migration_stats.projects_only_in_source}</strong></span>
+              </div>
+            )}
+            {migration_stats.projects_only_in_target > 0 && (
+              <div className="project-stat info">
+                <span className="stat-icon">✨</span>
+                <span>Новых проектов: <strong>{migration_stats.projects_only_in_target}</strong></span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Несовпадающие проекты */}
+        {project_mismatches && project_mismatches.count > 0 && (
+          <div className="mismatches-section">
+            <h4>⚠️ Проекты, отсутствующие в новой выгрузке ({project_mismatches.count})</h4>
+            <p className="mismatch-note">{project_mismatches.note}</p>
+            <div className="mismatch-list">
+              {project_mismatches.projects_only_in_old_file.map((project, idx) => (
+                <span key={idx} className="project-badge">{project}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Образцы новых CVE */}
+        {migration_stats.new_cves_sample && migration_stats.new_cves_sample.length > 0 && (
+          <div className="new-cves-section">
+            <h4>✨ Примеры новых CVE (из {migration_stats.new_cves_in_target})</h4>
+            <div className="cve-list">
+              {migration_stats.new_cves_sample.map((item, idx) => (
+                <div key={idx} className="cve-item">
+                  <span className="cve-id">{item.cve}</span>
+                  <span className="cve-project">{item.project}</span>
+                </div>
+              ))}
+            </div>
+            {migration_stats.new_cves_in_target > migration_stats.new_cves_sample.length && (
+              <p className="more-cves">
+                ... и еще {migration_stats.new_cves_in_target - migration_stats.new_cves_sample.length} CVE
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Предупреждения */}
+        {warnings && warnings.length > 0 && (
+          <div className="warnings-section">
+            <h4>⚠️ Предупреждения</h4>
+            <ul className="warnings-list">
+              {warnings.map((warning, idx) => (
+                <li key={idx}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Детали файлов */}
+        <div className="file-details">
+          <h4>📄 Детали обработки</h4>
+          <div className="details-grid">
+            <div className="detail-item">
+              <strong>Исходный файл:</strong> {migrationLog.source_filename}
+              <div className="sub-detail">Строк: {source_stats.total_rows}</div>
+            </div>
+            <div className="detail-item">
+              <strong>Целевой файл:</strong> {migrationLog.target_filename}
+              <div className="sub-detail">Строк: {target_stats.total_rows}</div>
+            </div>
+            <div className="detail-item">
+              <strong>Результат:</strong> {migrationLog.result_rows} строк
+              <div className="sub-detail">Столбцов: {migrationLog.result_columns?.length || 0}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -97,14 +234,15 @@ const SBOMMigrate = ({ onBack }) => {
       </button>
 
       <div className="tool-header">
-        <h2>🔄 Vulnerability Comments Transfer</h2>
-        <p>Перенос комментариев между выгрузками уязвимостей</p>
+        <h2>🔄 Vulnerability Comments Migration</h2>
+        <p>Перенос комментариев между выгрузками уязвимостей по совпадению CVE ID и Project</p>
       </div>
 
       <div className="upload-section">
         <div className="file-input-group">
           <label>
-            <strong>Старая выгрузка (с комментариями):</strong>
+            <strong>1. Старая выгрузка (с комментариями):</strong>
+            <span className="file-hint">Файл должен содержать столбцы: CVE ID, Project, Comment</span>
             <input
               type="file"
               accept=".csv,.xlsx"
@@ -117,7 +255,8 @@ const SBOMMigrate = ({ onBack }) => {
 
         <div className="file-input-group">
           <label>
-            <strong>Новая выгрузка:</strong>
+            <strong>2. Новая выгрузка (без комментариев):</strong>
+            <span className="file-hint">Файл должен содержать столбцы: CVE ID, Project</span>
             <input
               type="file"
               accept=".csv,.xlsx"
@@ -130,7 +269,7 @@ const SBOMMigrate = ({ onBack }) => {
 
         <div className="format-selector">
           <label>
-            <strong>Формат экспорта:</strong>
+            <strong>3. Формат экспорта:</strong>
             <select
               value={exportFormat}
               onChange={(e) => setExportFormat(e.target.value)}
@@ -149,7 +288,7 @@ const SBOMMigrate = ({ onBack }) => {
           disabled={loading || !sourceFile || !targetFile}
           className="btn-primary"
         >
-          {loading ? 'Обработка...' : 'Проверить миграцию'}
+          {loading ? '⏳ Анализ...' : '🔍 Проанализировать миграцию'}
         </button>
 
         <button
@@ -157,44 +296,48 @@ const SBOMMigrate = ({ onBack }) => {
           disabled={loading || !sourceFile || !targetFile}
           className="btn-success"
         >
-          {loading ? 'Экспорт...' : 'Экспортировать'}
+          {loading ? '⏳ Экспорт...' : '💾 Экспортировать с комментариями'}
         </button>
       </div>
 
       {error && (
         <div className="message error-message">
-          <strong>Ошибка:</strong> {error}
+          <strong>❌ Ошибка:</strong> {error}
         </div>
       )}
 
-      {result && (
-        <div className="message success-message">
-          <strong>Успех!</strong>
-          {result.message ? (
-            <p>{result.message}</p>
-          ) : (
-            <div className="result-details">
-              <p>✓ Обработано записей из старой выгрузки: {result.source_rows}</p>
-              <p>✓ Обработано записей из новой выгрузки: {result.target_rows}</p>
-              <p>✓ Итоговое количество записей: {result.result_rows}</p>
-              <p>Столбцы в результате: {result.columns?.join(', ')}</p>
-            </div>
-          )}
-        </div>
-      )}
+      {renderMigrationLog()}
 
       <div className="info-section">
-        <h3>Как это работает:</h3>
+        <h3>ℹ️ Как это работает:</h3>
         <ol>
-          <li>Загрузите старую выгрузку, содержащую комментарии</li>
-          <li>Загрузите новую выгрузку, в которую нужно перенести комментарии</li>
-          <li>Система автоматически сопоставит записи по CVE ID и Project</li>
-          <li>Нажмите "Проверить миграцию" для предварительного просмотра</li>
-          <li>Нажмите "Экспортировать" для загрузки результата</li>
+          <li><strong>Загрузите старую выгрузку</strong> - файл с существующими комментариями к уязвимостям</li>
+          <li><strong>Загрузите новую выгрузку</strong> - актуальный список уязвимостей без комментариев</li>
+          <li><strong>Система автоматически:</strong>
+            <ul>
+              <li>Сопоставляет записи по совпадению <strong>CVE ID</strong> и <strong>Project</strong></li>
+              <li>Переносит комментарии в новую выгрузку</li>
+              <li>Создает детальный отчет о миграции</li>
+            </ul>
+          </li>
+          <li><strong>Проанализируйте результат</strong> - просмотрите статистику и несовпадения</li>
+          <li><strong>Экспортируйте файл</strong> - скачайте обогащенную выгрузку с комментариями</li>
         </ol>
 
+        <div className="features">
+          <h4>✨ Возможности:</h4>
+          <ul>
+            <li>✅ Автоматическое сопоставление по CVE ID + Project</li>
+            <li>✅ Детальный лог обработки с статистикой</li>
+            <li>✅ Отчет о несовпадающих проектах</li>
+            <li>✅ Список новых CVE в целевом файле</li>
+            <li>✅ Поддержка форматов CSV и XLSX</li>
+            <li>✅ Сохранение всех данных из целевого файла</li>
+          </ul>
+        </div>
+
         <div className="supported-formats">
-          <strong>Поддерживаемые форматы:</strong> CSV, XLSX
+          <strong>Поддерживаемые форматы:</strong> CSV (.csv), Excel (.xlsx)
         </div>
       </div>
     </div>

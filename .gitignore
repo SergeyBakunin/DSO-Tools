@@ -97,5 +97,12 @@ test_vex_output.json
 # Local development
 *.local
 
+# Documentation/Instructions
+instructions/
+
+# NAS deployment artifacts
+nas-deployment/*.tar
+*.tar
+
 # Windows
 *.lnk

@@ -32,7 +32,7 @@ def read_file(file: UploadFile) -> pd.DataFrame:
         raise HTTPException(status_code=400, detail="Unsupported file format. Use CSV or XLSX")
 
 
-def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> pd.DataFrame:
+def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Переносит комментарии из source_df в target_df по совпадению CVE ID и Project
 
@@ -41,14 +41,27 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> pd.Dat
         target_df: Таблица 2 (новая выгрузка)
 
     Returns:
-        DataFrame с перенесёнными комментариями
+        tuple: (DataFrame с перенесёнными комментариями, Отчет о миграции)
     """
     # Создаём копию target_df
     result_df = target_df.copy()
 
+    # Инициализация отчета
+    migration_log = {
+        "status": "success",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "source_stats": {},
+        "target_stats": {},
+        "migration_stats": {},
+        "project_mismatches": [],
+        "warnings": [],
+        "errors": []
+    }
+
     # Если в target_df нет столбца Comment, создаём его
     if 'Comment' not in result_df.columns:
         result_df['Comment'] = ''
+        migration_log["warnings"].append("Столбец 'Comment' не найден в целевом файле. Создан новый столбец.")
 
     # Нормализуем названия столбцов для поиска
     source_cols = {col.lower().strip(): col for col in source_df.columns}
@@ -66,42 +79,128 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> pd.Dat
     if not all([cve_col_source, project_col_source, comment_col_source]):
         raise HTTPException(
             status_code=400,
-            detail=f"Source file missing required columns. Found: {list(source_df.columns)}"
+            detail=f"Source file missing required columns (CVE ID, Project, Comment). Found: {list(source_df.columns)}"
         )
 
     if not all([cve_col_target, project_col_target]):
         raise HTTPException(
             status_code=400,
-            detail=f"Target file missing required columns. Found: {list(result_df.columns)}"
+            detail=f"Target file missing required columns (CVE ID, Project). Found: {list(result_df.columns)}"
         )
+
+    # Статистика исходных файлов
+    migration_log["source_stats"] = {
+        "total_rows": len(source_df),
+        "cve_column": cve_col_source,
+        "project_column": project_col_source,
+        "comment_column": comment_col_source
+    }
+
+    migration_log["target_stats"] = {
+        "total_rows": len(target_df),
+        "cve_column": cve_col_target,
+        "project_column": project_col_target,
+        "comment_column": comment_col_target
+    }
 
     # Создаём словарь для быстрого поиска комментариев
     # Ключ: (CVE ID, Project), Значение: Comment
     comment_map = {}
-    for _, row in source_df.iterrows():
+    source_projects = set()
+    skipped_source_rows = 0
+
+    for idx, row in source_df.iterrows():
         cve_id = str(row[cve_col_source]).strip() if pd.notna(row[cve_col_source]) else ''
         project = str(row[project_col_source]).strip() if pd.notna(row[project_col_source]) else ''
         comment = str(row[comment_col_source]).strip() if pd.notna(row[comment_col_source]) else ''
 
-        if cve_id and project and comment:
+        if project:
+            source_projects.add(project)
+
+        if not cve_id or not project:
+            skipped_source_rows += 1
+            continue
+
+        if comment:
             key = (cve_id, project)
             comment_map[key] = comment
 
-    # Переносим комментарии
+    if skipped_source_rows > 0:
+        migration_log["warnings"].append(
+            f"Пропущено {skipped_source_rows} строк в исходном файле (отсутствует CVE ID или Project)"
+        )
+
+    # Переносим комментарии и собираем статистику
     matched_count = 0
+    target_projects = set()
+    skipped_target_rows = 0
+    new_cves = []  # CVE, которые есть в target, но нет в source
+
     for idx, row in result_df.iterrows():
         cve_id = str(row[cve_col_target]).strip() if pd.notna(row[cve_col_target]) else ''
         project = str(row[project_col_target]).strip() if pd.notna(row[project_col_target]) else ''
 
-        if cve_id and project:
-            key = (cve_id, project)
-            if key in comment_map:
-                result_df.at[idx, comment_col_target] = comment_map[key]
-                matched_count += 1
+        if project:
+            target_projects.add(project)
 
-    print(f"Matched and migrated {matched_count} comments from {len(comment_map)} available")
+        if not cve_id or not project:
+            skipped_target_rows += 1
+            continue
 
-    return result_df
+        key = (cve_id, project)
+        if key in comment_map:
+            result_df.at[idx, comment_col_target] = comment_map[key]
+            matched_count += 1
+        else:
+            # Проверяем, новый ли это CVE
+            source_has_cve = any(cve_id == str(r[cve_col_source]).strip()
+                                for _, r in source_df.iterrows()
+                                if pd.notna(r[cve_col_source]))
+            if not source_has_cve:
+                new_cves.append({"cve": cve_id, "project": project})
+
+    if skipped_target_rows > 0:
+        migration_log["warnings"].append(
+            f"Пропущено {skipped_target_rows} строк в целевом файле (отсутствует CVE ID или Project)"
+        )
+
+    # Анализ несовпадающих проектов
+    projects_only_in_source = source_projects - target_projects
+    projects_only_in_target = target_projects - source_projects
+    common_projects = source_projects & target_projects
+
+    if projects_only_in_source:
+        migration_log["project_mismatches"] = {
+            "projects_only_in_old_file": sorted(list(projects_only_in_source)),
+            "count": len(projects_only_in_source),
+            "note": "Эти проекты были в старой выгрузке, но отсутствуют в новой"
+        }
+
+    # Статистика миграции
+    migration_log["migration_stats"] = {
+        "comments_migrated": matched_count,
+        "comments_available_in_source": len(comment_map),
+        "migration_rate_percent": round((matched_count / len(comment_map) * 100) if len(comment_map) > 0 else 0, 2),
+        "unique_projects_in_source": len(source_projects),
+        "unique_projects_in_target": len(target_projects),
+        "common_projects": len(common_projects),
+        "projects_only_in_source": len(projects_only_in_source),
+        "projects_only_in_target": len(projects_only_in_target),
+        "new_cves_in_target": len(new_cves),
+        "new_cves_sample": new_cves[:5] if len(new_cves) > 5 else new_cves
+    }
+
+    if len(new_cves) > 0:
+        migration_log["warnings"].append(
+            f"Найдено {len(new_cves)} новых CVE в целевом файле (отсутствуют в исходном). Это нормально для новой версии выгрузки."
+        )
+
+    print(f"✅ Migrated {matched_count} comments from {len(comment_map)} available")
+    print(f"📊 Common projects: {len(common_projects)}")
+    print(f"⚠️  Projects only in source: {len(projects_only_in_source)}")
+    print(f"✨ New CVEs in target: {len(new_cves)}")
+
+    return result_df, migration_log
 
 
 def convert_sbom_to_vex(sbom_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -256,22 +355,23 @@ async def sbom_migrate(
 ):
     """
     Мигрирует комментарии из старой выгрузки в новую по совпадению CVE ID и Project
+    Возвращает детальный отчет о миграции
     """
     try:
         # Читаем файлы
         source_df = read_file(source_file)
         target_df = read_file(target_file)
 
-        # Выполняем миграцию
-        result_df = migrate_comments(source_df, target_df)
+        # Выполняем миграцию с логированием
+        result_df, migration_log = migrate_comments(source_df, target_df)
 
-        return {
-            "status": "success",
-            "source_rows": len(source_df),
-            "target_rows": len(target_df),
-            "result_rows": len(result_df),
-            "columns": list(result_df.columns)
-        }
+        # Добавляем информацию о файлах
+        migration_log["source_filename"] = source_file.filename
+        migration_log["target_filename"] = target_file.filename
+        migration_log["result_rows"] = len(result_df)
+        migration_log["result_columns"] = list(result_df.columns)
+
+        return migration_log
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -292,7 +392,17 @@ async def sbom_migrate_export(
         target_df = read_file(target_file)
 
         # Выполняем миграцию
-        result_df = migrate_comments(source_df, target_df)
+        result_df, migration_log = migrate_comments(source_df, target_df)
+
+        # Выводим лог в консоль для отладки
+        print(f"\n{'='*80}")
+        print(f"📊 Migration Log:")
+        print(f"  Migrated: {migration_log['migration_stats']['comments_migrated']}")
+        print(f"  Available: {migration_log['migration_stats']['comments_available_in_source']}")
+        print(f"  Rate: {migration_log['migration_stats']['migration_rate_percent']}%")
+        if migration_log.get('project_mismatches'):
+            print(f"  ⚠️  Project mismatches: {migration_log['project_mismatches']['count']}")
+        print(f"{'='*80}\n")
 
         # Экспорт в нужный формат
         output = io.BytesIO()
