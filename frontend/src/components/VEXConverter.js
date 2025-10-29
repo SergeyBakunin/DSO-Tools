@@ -3,6 +3,9 @@ import axios from 'axios';
 
 const VEXConverter = ({ onBack }) => {
   const [sbomFile, setSbomFile] = useState(null);
+  const [fileType, setFileType] = useState(null); // 'json' or 'xlsx'
+  const [productName, setProductName] = useState('');
+  const [productVersion, setProductVersion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -10,14 +13,32 @@ const VEXConverter = ({ onBack }) => {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
   const handleFileChange = (e) => {
-    setSbomFile(e.target.files[0]);
+    const file = e.target.files[0];
+    setSbomFile(file);
     setResult(null);
     setError(null);
+
+    // Определяем тип файла
+    if (file) {
+      if (file.name.endsWith('.json')) {
+        setFileType('json');
+      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        setFileType('xlsx');
+      } else {
+        setFileType(null);
+        setError('Неподдерживаемый формат файла. Используйте JSON или XLSX');
+      }
+    }
   };
 
   const handleAnalyze = async () => {
     if (!sbomFile) {
-      setError('Пожалуйста, выберите SBOM файл');
+      setError('Пожалуйста, выберите файл');
+      return;
+    }
+
+    if (!fileType) {
+      setError('Неподдерживаемый формат файла');
       return;
     }
 
@@ -26,26 +47,52 @@ const VEXConverter = ({ onBack }) => {
     setResult(null);
 
     const formData = new FormData();
-    formData.append('sbom_file', sbomFile);
 
-    try {
-      const response = await axios.post(`${API_URL}/api/sbom-to-vex`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+    if (fileType === 'json') {
+      formData.append('sbom_file', sbomFile);
 
-      setResult(response.data);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Произошла ошибка при анализе SBOM');
-    } finally {
-      setLoading(false);
+      try {
+        const response = await axios.post(`${API_URL}/api/sbom-to-vex`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        setResult(response.data);
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Произошла ошибка при анализе SBOM');
+      } finally {
+        setLoading(false);
+      }
+    } else if (fileType === 'xlsx') {
+      formData.append('xlsx_file', sbomFile);
+      if (productName) formData.append('product_name', productName);
+      if (productVersion) formData.append('product_version', productVersion);
+
+      try {
+        const response = await axios.post(`${API_URL}/api/xlsx-to-vex`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        setResult(response.data);
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Произошла ошибка при анализе XLSX');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleConvert = async () => {
     if (!sbomFile) {
-      setError('Пожалуйста, выберите SBOM файл');
+      setError('Пожалуйста, выберите файл');
+      return;
+    }
+
+    if (!fileType) {
+      setError('Неподдерживаемый формат файла');
       return;
     }
 
@@ -53,10 +100,20 @@ const VEXConverter = ({ onBack }) => {
     setError(null);
 
     const formData = new FormData();
-    formData.append('sbom_file', sbomFile);
+    let endpoint = '';
+
+    if (fileType === 'json') {
+      formData.append('sbom_file', sbomFile);
+      endpoint = '/api/sbom-to-vex/export';
+    } else if (fileType === 'xlsx') {
+      formData.append('xlsx_file', sbomFile);
+      if (productName) formData.append('product_name', productName);
+      if (productVersion) formData.append('product_version', productVersion);
+      endpoint = '/api/xlsx-to-vex/export';
+    }
 
     try {
-      const response = await axios.post(`${API_URL}/api/sbom-to-vex/export`, formData, {
+      const response = await axios.post(`${API_URL}${endpoint}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -101,22 +158,63 @@ const VEXConverter = ({ onBack }) => {
 
       <div className="tool-header">
         <h2>📋 VEX Converter</h2>
-        <p>Конвертация CycloneDX SBOM в формат VEX (Vulnerability Exploitability eXchange)</p>
+        <p>Конвертация SBOM или XLSX в формат VEX (Vulnerability Exploitability eXchange)</p>
       </div>
 
       <div className="upload-section">
         <div className="file-input-group">
           <label>
-            <strong>SBOM файл (CycloneDX v1.6):</strong>
+            <strong>Файл с уязвимостями:</strong>
             <input
               type="file"
-              accept=".json"
+              accept=".json,.xlsx,.xls"
               onChange={handleFileChange}
               disabled={loading}
             />
-            {sbomFile && <span className="file-name">✓ {sbomFile.name}</span>}
+            {sbomFile && (
+              <span className="file-name">
+                ✓ {sbomFile.name}
+                {fileType && <span className="file-type-badge">[{fileType.toUpperCase()}]</span>}
+              </span>
+            )}
           </label>
+          <p className="file-hint">
+            Поддерживаемые форматы: CycloneDX SBOM (JSON) или XLSX с уязвимостями
+          </p>
         </div>
+
+        {fileType === 'xlsx' && (
+          <div className="product-info-section">
+            <h4>Информация о продукте (опционально):</h4>
+            <div className="product-inputs">
+              <label>
+                <strong>Название продукта:</strong>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="Например: My Application"
+                  disabled={loading}
+                  className="product-input"
+                />
+              </label>
+              <label>
+                <strong>Версия продукта:</strong>
+                <input
+                  type="text"
+                  value={productVersion}
+                  onChange={(e) => setProductVersion(e.target.value)}
+                  placeholder="Например: 1.0.0"
+                  disabled={loading}
+                  className="product-input"
+                />
+              </label>
+            </div>
+            <p className="field-hint">
+              Если не указано, информация о продукте будет извлечена из файла
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="action-buttons">
@@ -125,7 +223,7 @@ const VEXConverter = ({ onBack }) => {
           disabled={loading || !sbomFile}
           className="btn-primary"
         >
-          {loading ? 'Анализ...' : 'Анализировать SBOM'}
+          {loading ? 'Анализ...' : `Анализировать ${fileType === 'xlsx' ? 'XLSX' : 'SBOM'}`}
         </button>
 
         <button
@@ -151,7 +249,7 @@ const VEXConverter = ({ onBack }) => {
               <p>{result.message}</p>
               {result.filename && <p>Файл: {result.filename}</p>}
             </div>
-          ) : (
+          ) : fileType === 'json' ? (
             <div className="result-details">
               <h4>Информация о конвертации:</h4>
               <p>✓ Формат SBOM: {result.sbom_format} (версия {result.sbom_version})</p>
@@ -161,7 +259,80 @@ const VEXConverter = ({ onBack }) => {
               <p>✓ Серийный номер VEX: {result.vex_serial_number}</p>
               <p>✓ Время конвертации: {new Date(result.conversion_timestamp).toLocaleString('ru-RU')}</p>
             </div>
-          )}
+          ) : fileType === 'xlsx' ? (
+            <div className="result-details">
+              <h4>Информация о конвертации:</h4>
+              <p>✓ Исходный файл: {result.source_filename}</p>
+              <p>✓ Строк в файле: {result.source_rows}</p>
+              <p>✓ Уязвимостей в VEX: {result.vex_vulnerabilities}</p>
+              <p>✓ Продукт: {result.product_name} (версия {result.product_version})</p>
+              <p>✓ Серийный номер VEX: {result.vex_serial_number}</p>
+              <p>✓ Версия VEX: {result.vex_version}</p>
+              <p>✓ Время конвертации: {new Date(result.conversion_timestamp).toLocaleString('ru-RU')}</p>
+
+              {result.statistics && (
+                <div className="statistics-section">
+                  <h4>Статистика:</h4>
+
+                  {result.statistics.state_distribution && (
+                    <div className="stat-group">
+                      <strong>Распределение по статусам:</strong>
+                      <ul>
+                        {Object.entries(result.statistics.state_distribution).map(([state, count]) => (
+                          <li key={state}>{state}: {count}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.statistics.justification_distribution && Object.keys(result.statistics.justification_distribution).length > 0 && (
+                    <div className="stat-group">
+                      <strong>Обоснования:</strong>
+                      <ul>
+                        {Object.entries(result.statistics.justification_distribution).map(([justification, count]) => (
+                          <li key={justification}>{justification}: {count}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.statistics.technology_distribution && (
+                    <div className="stat-group">
+                      <strong>Топ-5 технологий:</strong>
+                      <ul>
+                        {Object.entries(result.statistics.technology_distribution)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([tech, count]) => (
+                            <li key={tech}>{tech}: {count}</li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.statistics.project_distribution && (
+                    <div className="stat-group">
+                      <strong>Топ-5 проектов:</strong>
+                      <ul>
+                        {Object.entries(result.statistics.project_distribution)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([project, count]) => (
+                            <li key={project}>{project}: {count}</li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.statistics.has_exploit_count > 0 && (
+                    <div className="stat-group warning">
+                      <strong>⚠️ Уязвимостей с эксплойтами: {result.statistics.has_exploit_count}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -175,25 +346,44 @@ const VEXConverter = ({ onBack }) => {
 
         <h3>Как работает конвертер:</h3>
         <ol>
-          <li>Загрузите SBOM файл в формате CycloneDX v1.6 (JSON)</li>
-          <li>Нажмите "Анализировать SBOM" для просмотра статистики</li>
+          <li>Загрузите файл:
+            <ul>
+              <li><strong>JSON:</strong> SBOM файл в формате CycloneDX v1.6</li>
+              <li><strong>XLSX:</strong> Таблица с уязвимостями (из CodeScoring, NBSS и т.д.)</li>
+            </ul>
+          </li>
+          <li>Для XLSX укажите название и версию продукта (опционально)</li>
+          <li>Нажмите "Анализировать" для просмотра статистики</li>
           <li>Нажмите "Конвертировать в VEX" для создания VEX документа</li>
           <li>VEX документ будет автоматически загружен</li>
         </ol>
 
         <h3>Что включается в VEX документ:</h3>
         <ul>
-          <li>Все уязвимости из SBOM</li>
-          <li>Рейтинги и оценки (CVSS scores)</li>
+          <li>Все уязвимости из исходного файла</li>
+          <li>Рейтинги и оценки (CVSS 2/3 scores)</li>
           <li>Ссылки на источники (NVD, GitHub Advisories, и т.д.)</li>
           <li>CWE классификация</li>
           <li>Описания и рекомендации</li>
-          <li>Затронутые компоненты</li>
-          <li>Дополнительные свойства и метаданные</li>
+          <li>Затронутые компоненты и версии</li>
+          <li><strong>VEX Analysis:</strong> state, justification, response, detail</li>
+          <li>Дополнительные свойства: технологии, проекты, окружение</li>
+        </ul>
+
+        <h3>Требования к XLSX файлу:</h3>
+        <p>Для корректной конвертации XLSX файл должен содержать колонки:</p>
+        <ul>
+          <li><strong>Обязательные:</strong> CVE ID, Dependency name, Dependency version</li>
+          <li><strong>VEX поля:</strong> State, Justification, Response, Detail</li>
+          <li><strong>Опциональные:</strong> CVSS scores, CWEs, Summary, Fixed version, Technology, Project, и другие</li>
         </ul>
 
         <div className="supported-formats">
-          <strong>Поддерживаемый формат:</strong> CycloneDX 1.6 (JSON)
+          <strong>Поддерживаемые форматы:</strong>
+          <ul>
+            <li>CycloneDX 1.6 SBOM (JSON)</li>
+            <li>XLSX с уязвимостями (CodeScoring, NBSS, etc.)</li>
+          </ul>
         </div>
       </div>
     </div>
