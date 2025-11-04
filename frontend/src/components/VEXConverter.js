@@ -10,13 +10,20 @@ const VEXConverter = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  // Новые состояния для работы с проектами
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('all'); // 'all' or project name
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     setSbomFile(file);
     setResult(null);
     setError(null);
+    setProjects([]);
+    setSelectedProject('all');
 
     // Определяем тип файла
     if (file) {
@@ -24,10 +31,35 @@ const VEXConverter = ({ onBack }) => {
         setFileType('json');
       } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         setFileType('xlsx');
+        // Автоматически загружаем список проектов для XLSX файлов
+        await loadProjects(file);
       } else {
         setFileType(null);
         setError('Неподдерживаемый формат файла. Используйте JSON или XLSX');
       }
+    }
+  };
+
+  const loadProjects = async (file) => {
+    setLoadingProjects(true);
+    const formData = new FormData();
+    formData.append('xlsx_file', file);
+
+    try {
+      const response = await axios.post(`${API_URL}/api/xlsx-to-vex/projects`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.has_projects) {
+        setProjects(response.data.projects);
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+      // Не показываем ошибку пользователю, просто не показываем проекты
+    } finally {
+      setLoadingProjects(false);
     }
   };
 
@@ -68,6 +100,9 @@ const VEXConverter = ({ onBack }) => {
       formData.append('xlsx_file', sbomFile);
       if (productName) formData.append('product_name', productName);
       if (productVersion) formData.append('product_version', productVersion);
+      if (selectedProject && selectedProject !== 'all') {
+        formData.append('project_filter', selectedProject);
+      }
 
       try {
         const response = await axios.post(`${API_URL}/api/xlsx-to-vex`, formData, {
@@ -106,10 +141,20 @@ const VEXConverter = ({ onBack }) => {
       formData.append('sbom_file', sbomFile);
       endpoint = '/api/sbom-to-vex/export';
     } else if (fileType === 'xlsx') {
-      formData.append('xlsx_file', sbomFile);
-      if (productName) formData.append('product_name', productName);
-      if (productVersion) formData.append('product_version', productVersion);
-      endpoint = '/api/xlsx-to-vex/export';
+      // Если выбрано "Все проекты (отдельными файлами)", используем специальный эндпоинт
+      if (selectedProject === 'all_separate') {
+        formData.append('xlsx_file', sbomFile);
+        if (productVersion) formData.append('product_version', productVersion);
+        endpoint = '/api/xlsx-to-vex/export-all-projects';
+      } else {
+        formData.append('xlsx_file', sbomFile);
+        if (productName) formData.append('product_name', productName);
+        if (productVersion) formData.append('product_version', productVersion);
+        if (selectedProject && selectedProject !== 'all') {
+          formData.append('project_filter', selectedProject);
+        }
+        endpoint = '/api/xlsx-to-vex/export';
+      }
     }
 
     try {
@@ -213,6 +258,41 @@ const VEXConverter = ({ onBack }) => {
             <p className="field-hint">
               Если не указано, информация о продукте будет извлечена из файла
             </p>
+          </div>
+        )}
+
+        {fileType === 'xlsx' && projects.length > 0 && (
+          <div className="project-selection-section">
+            <h4>Выбор проекта:</h4>
+            {loadingProjects ? (
+              <p>Загрузка списка проектов...</p>
+            ) : (
+              <>
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  disabled={loading}
+                  className="project-select"
+                >
+                  <option value="all">Все проекты (один файл)</option>
+                  <option value="all_separate">Все проекты (отдельные файлы в ZIP)</option>
+                  <optgroup label="Отдельные проекты:">
+                    {projects.map((project) => (
+                      <option key={project.name} value={project.name}>
+                        {project.name} ({project.vulnerability_count} уязвимостей)
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <p className="field-hint">
+                  {selectedProject === 'all' && 'Будет создан один VEX файл со всеми уязвимостями'}
+                  {selectedProject === 'all_separate' && `Будет создан ZIP архив с ${projects.length} VEX файлами (по одному на проект)`}
+                  {selectedProject !== 'all' && selectedProject !== 'all_separate' &&
+                    `Будет создан VEX файл только для проекта "${selectedProject}"`
+                  }
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
