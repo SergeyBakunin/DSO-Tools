@@ -389,6 +389,10 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
         else:
             product_name = "SBOM Analysis"
 
+    # Определяем версию продукта, если не передана
+    if not product_version:
+        product_version = "1.0.0"  # Default version
+
     # Создаём VEX документ
     vex_document = {
         "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
@@ -403,7 +407,7 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
                     {
                         "type": "application",
                         "name": "DevSecOps Tools - XLSX to VEX Converter",
-                        "version": "1.1.0",
+                        "version": "1.3.0",
                         "description": "Converts vulnerability analysis XLSX to CycloneDX VEX format"
                     }
                 ]
@@ -411,7 +415,7 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
             "component": {
                 "type": "application",
                 "name": product_name,
-                "version": product_version if product_version else "unknown"
+                "version": product_version
             }
         },
         "vulnerabilities": []
