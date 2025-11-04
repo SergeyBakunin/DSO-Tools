@@ -635,3 +635,119 @@
   border-radius: 8px;
   color: #666;
 }
+
+/* VEX Validator Styles */
+.validation-info {
+  margin-top: 20px;
+}
+
+.validation-info ul {
+  list-style: none;
+  padding: 0;
+}
+
+.validation-info li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.validation-info li.warning {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.validation-errors, .validation-warnings {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.validation-errors {
+  background: #fee;
+  border-left: 4px solid #f44;
+}
+
+.validation-warnings {
+  background: #fffbea;
+  border-left: 4px solid #f59e0b;
+}
+
+.validation-errors h4, .validation-warnings h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.error-item {
+  color: #c33;
+  padding: 5px 0;
+}
+
+.warning-item {
+  color: #d97706;
+  padding: 5px 0;
+}
+
+.warning-message {
+  background: #fffbea;
+  border-left: 4px solid #f59e0b;
+  color: #d97706;
+}
+
+.stat-group {
+  margin-top: 15px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.stat-group h5 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #667eea;
+}
+
+.stat-group ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.stat-group li {
+  padding: 4px 0;
+  border-bottom: none;
+}
+
+.product-info-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 10px;
+  border-left: 4px solid #667eea;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.text-input:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.text-input::placeholder {
+  color: #9ca3af;
+}

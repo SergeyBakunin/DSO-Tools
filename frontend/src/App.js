@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import SBOMMigrate from './components/SBOMMigrate';
 import VEXConverter from './components/VEXConverter';
+import VEXValidator from './components/VEXValidator';
 
 function App() {
   const [activeCard, setActiveCard] = useState(null);
@@ -45,9 +46,17 @@ function App() {
       active: false
     },
     {
+      id: 'vex-validator',
+      title: 'VEX Validator',
+      icon: '✅',
+      description: 'Валидация VEX документов согласно стандарту CycloneDX 1.6',
+      component: VEXValidator,
+      active: true
+    },
+    {
       id: 'sbom-validator',
       title: 'SBOM Validator',
-      icon: '✅',
+      icon: '📝',
       description: 'Валидация SBOM файлов по стандартам CycloneDX и SPDX',
       active: false
     }
