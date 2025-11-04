@@ -4,8 +4,6 @@ import axios from 'axios';
 const VEXConverter = ({ onBack }) => {
   const [sbomFile, setSbomFile] = useState(null);
   const [fileType, setFileType] = useState(null); // 'json' or 'xlsx'
-  const [productName, setProductName] = useState('');
-  const [productVersion, setProductVersion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -98,9 +96,7 @@ const VEXConverter = ({ onBack }) => {
       }
     } else if (fileType === 'xlsx') {
       formData.append('xlsx_file', sbomFile);
-      if (productName) formData.append('product_name', productName);
-      if (productVersion) formData.append('product_version', productVersion);
-      if (selectedProject && selectedProject !== 'all') {
+      if (selectedProject && selectedProject !== 'all' && selectedProject !== 'all_separate') {
         formData.append('project_filter', selectedProject);
       }
 
@@ -144,12 +140,9 @@ const VEXConverter = ({ onBack }) => {
       // Если выбрано "Все проекты (отдельными файлами)", используем специальный эндпоинт
       if (selectedProject === 'all_separate') {
         formData.append('xlsx_file', sbomFile);
-        if (productVersion) formData.append('product_version', productVersion);
         endpoint = '/api/xlsx-to-vex/export-all-projects';
       } else {
         formData.append('xlsx_file', sbomFile);
-        if (productName) formData.append('product_name', productName);
-        if (productVersion) formData.append('product_version', productVersion);
         if (selectedProject && selectedProject !== 'all') {
           formData.append('project_filter', selectedProject);
         }
@@ -169,9 +162,9 @@ const VEXConverter = ({ onBack }) => {
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'vex_document.json';
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
         }
       }
 
@@ -229,39 +222,6 @@ const VEXConverter = ({ onBack }) => {
             Поддерживаемые форматы: CycloneDX SBOM (JSON) или XLSX с уязвимостями
           </p>
         </div>
-
-        {fileType === 'xlsx' && (
-          <div className="product-info-section">
-            <h4>Информация о продукте (опционально):</h4>
-            <div className="product-inputs">
-              <label>
-                <strong>Название продукта:</strong>
-                <input
-                  type="text"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="Например: My Application"
-                  disabled={loading}
-                  className="product-input"
-                />
-              </label>
-              <label>
-                <strong>Версия продукта:</strong>
-                <input
-                  type="text"
-                  value={productVersion}
-                  onChange={(e) => setProductVersion(e.target.value)}
-                  placeholder="Например: 1.0.0"
-                  disabled={loading}
-                  className="product-input"
-                />
-              </label>
-            </div>
-            <p className="field-hint">
-              Если не указано, информация о продукте будет извлечена из файла
-            </p>
-          </div>
-        )}
 
         {fileType === 'xlsx' && projects.length > 0 && (
           <div className="project-selection-section">
