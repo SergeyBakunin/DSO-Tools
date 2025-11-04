@@ -161,11 +161,19 @@ const VEXConverter = ({ onBack }) => {
       // Получаем имя файла из заголовка или генерируем
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'vex_document.json';
+
       if (contentDisposition) {
+        // Пробуем разные варианты парсинга filename
         const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
         if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1].replace(/['"]/g, '');
+          filename = filenameMatch[1].replace(/['"]/g, '').trim();
         }
+      }
+
+      // Если не удалось получить имя из заголовка, определяем по Content-Type
+      if (filename === 'vex_document.json' && response.headers['content-type'] === 'application/zip') {
+        const baseName = sbomFile.name.replace(/\.(xlsx|xls)$/i, '');
+        filename = `${baseName}_all_projects_vex.zip`;
       }
 
       // response.data уже blob, не нужно оборачивать еще раз

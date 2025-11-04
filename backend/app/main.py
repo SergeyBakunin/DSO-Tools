@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -816,7 +816,7 @@ async def sbom_to_vex_export(
 @app.post("/api/xlsx-to-vex")
 async def xlsx_to_vex(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
-    project_filter: str = None
+    project_filter: str = Form(None)
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает статистику
@@ -900,7 +900,7 @@ async def xlsx_to_vex(
 @app.post("/api/xlsx-to-vex/export")
 async def xlsx_to_vex_export(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
-    project_filter: str = None
+    project_filter: str = Form(None)
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает JSON файл для скачивания
