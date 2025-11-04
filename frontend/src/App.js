@@ -17,33 +17,12 @@ function App() {
       active: true
     },
     {
-      id: 'gitleaks',
-      title: 'GitLeaks Scanner',
-      icon: '🔐',
-      description: 'Сканирование репозиториев на наличие утечек секретов и учётных данных',
-      active: false
-    },
-    {
       id: 'vex-converter',
       title: 'VEX Converter',
       icon: '📋',
       description: 'Преобразование CycloneDX SBOM в формат VEX (Vulnerability Exploitability eXchange)',
       component: VEXConverter,
       active: true
-    },
-    {
-      id: 'vuln-analyzer',
-      title: 'Vulnerability Analyzer',
-      icon: '🔍',
-      description: 'Анализ уязвимостей и генерация отчётов',
-      active: false
-    },
-    {
-      id: 'dependency-checker',
-      title: 'Dependency Checker',
-      icon: '📦',
-      description: 'Проверка зависимостей на наличие известных уязвимостей',
-      active: false
     },
     {
       id: 'vex-validator',
@@ -54,10 +33,10 @@ function App() {
       active: true
     },
     {
-      id: 'sbom-validator',
-      title: 'SBOM Validator',
-      icon: '📝',
-      description: 'Валидация SBOM файлов по стандартам CycloneDX и SPDX',
+      id: 'gitleaks',
+      title: 'GitLeaks Scanner',
+      icon: '🔐',
+      description: 'Сканирование репозиториев на наличие утечек секретов и учётных данных',
       active: false
     }
   ];
