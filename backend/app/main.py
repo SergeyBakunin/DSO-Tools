@@ -343,7 +343,7 @@ def convert_sbom_to_vex(sbom_data: Dict[str, Any]) -> Dict[str, Any]:
     return vex_document
 
 
-def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_version: str = None) -> Dict[str, Any]:
+def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_version: str = None, project_filter: str = None) -> Dict[str, Any]:
     """
     Конвертирует XLSX таблицу с уязвимостями в CycloneDX VEX формат
 
@@ -351,6 +351,7 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
         df: DataFrame с колонками из NBSS экспорта
         product_name: Название продукта (опционально)
         product_version: Версия продукта (опционально)
+        project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
 
     Returns:
         VEX документ в формате CycloneDX 1.6
@@ -365,14 +366,28 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
             detail=f"Missing required columns: {', '.join(missing_columns)}"
         )
 
-    # Определяем название продукта из данных, если не передано
-    if not product_name and 'Project' in df.columns:
-        projects = df['Project'].dropna().unique()
-        if len(projects) > 0:
-            product_name = f"Multi-Project Analysis ({len(projects)} projects)"
+    # Фильтрация по проекту (если указан)
+    if project_filter and 'Project' in df.columns:
+        df = df[df['Project'] == project_filter].copy()
+        if len(df) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No vulnerabilities found for project: {project_filter}"
+            )
 
+    # Определяем название продукта из данных, если не передано
     if not product_name:
-        product_name = "SBOM Analysis"
+        if project_filter:
+            # Если фильтр по проекту, используем имя проекта
+            product_name = project_filter
+        elif 'Project' in df.columns:
+            projects = df['Project'].dropna().unique()
+            if len(projects) > 0:
+                product_name = f"Multi-Project Analysis ({len(projects)} projects)"
+            else:
+                product_name = "SBOM Analysis"
+        else:
+            product_name = "SBOM Analysis"
 
     # Создаём VEX документ
     vex_document = {
@@ -542,6 +557,13 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
                     "value": str(has_exploit).lower()
                 })
 
+        # Добавляем Files как property (НЕ в detail!)
+        if not pd.isna(row.get('Files')):
+            properties.append({
+                "name": "source_files",
+                "value": str(row['Files'])
+            })
+
         if properties:
             vex_vuln["properties"] = properties
 
@@ -618,17 +640,12 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
                 analysis["response"] = response_str
 
         # Detail (дополнительная информация)
+        # ВАЖНО: поле detail должно содержать только человекочитаемое объяснение анализа,
+        # а НЕ технические пути к файлам или другую служебную информацию
         detail = row.get('Detail')
         if not pd.isna(detail):
             analysis["detail"] = str(detail)
-
-        # Если нет detail, но есть дополнительная информация
-        if "detail" not in analysis:
-            detail_parts = []
-            if not pd.isna(row.get('Files')):
-                detail_parts.append(f"Files: {row['Files']}")
-            if detail_parts:
-                analysis["detail"] = "; ".join(detail_parts)
+        # Если Detail пустое, оставляем поле detail пустым (это валидно по спецификации)
 
         vex_vuln["analysis"] = analysis
 
@@ -800,17 +817,24 @@ async def sbom_to_vex_export(
 async def xlsx_to_vex(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
     product_name: str = None,
-    product_version: str = None
+    product_version: str = None,
+    project_filter: str = None
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает статистику
+
+    Args:
+        xlsx_file: XLSX файл с уязвимостями
+        product_name: Название продукта (опционально)
+        product_version: Версия продукта (опционально)
+        project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
         # Конвертируем в VEX
-        vex_data = convert_xlsx_to_vex(df, product_name, product_version)
+        vex_data = convert_xlsx_to_vex(df, product_name, product_version, project_filter)
 
         # Подсчитываем статистику по State
         state_stats = {}
@@ -879,17 +903,24 @@ async def xlsx_to_vex(
 async def xlsx_to_vex_export(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
     product_name: str = None,
-    product_version: str = None
+    product_version: str = None,
+    project_filter: str = None
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает JSON файл для скачивания
+
+    Args:
+        xlsx_file: XLSX файл с уязвимостями
+        product_name: Название продукта (опционально)
+        product_version: Версия продукта (опционально)
+        project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
         # Конвертируем в VEX
-        vex_data = convert_xlsx_to_vex(df, product_name, product_version)
+        vex_data = convert_xlsx_to_vex(df, product_name, product_version, project_filter)
 
         # Преобразуем в JSON
         vex_json = json.dumps(vex_data, indent=2, ensure_ascii=False)
@@ -900,7 +931,12 @@ async def xlsx_to_vex_export(
 
         # Генерируем имя файла на основе исходного XLSX
         original_name = xlsx_file.filename.replace('.xlsx', '').replace('.xls', '')
-        vex_filename = f"{original_name}_vex.json"
+        if project_filter:
+            # Добавляем имя проекта в имя файла
+            safe_project_name = project_filter.replace('/', '_').replace('\\', '_').replace(' ', '_')
+            vex_filename = f"{original_name}_{safe_project_name}_vex.json"
+        else:
+            vex_filename = f"{original_name}_vex.json"
 
         # Логирование в консоль
         print(f"\n{'='*80}")
@@ -917,6 +953,155 @@ async def xlsx_to_vex_export(
             output,
             media_type="application/json",
             headers={"Content-Disposition": f"attachment; filename={vex_filename}"}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/xlsx-to-vex/projects")
+async def get_xlsx_projects(
+    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями")
+):
+    """
+    Возвращает список всех проектов из XLSX файла с количеством уязвимостей в каждом
+
+    Returns:
+        JSON со списком проектов и статистикой
+    """
+    try:
+        # Читаем XLSX файл
+        df = read_file(xlsx_file)
+
+        # Проверяем наличие колонки Project
+        if 'Project' not in df.columns:
+            return {
+                "status": "success",
+                "has_projects": False,
+                "projects": [],
+                "total_rows": len(df),
+                "message": "XLSX file does not contain Project column"
+            }
+
+        # Получаем статистику по проектам
+        project_counts = df['Project'].value_counts().to_dict()
+
+        # Формируем список проектов с деталями
+        projects = []
+        for project_name, count in project_counts.items():
+            if pd.notna(project_name):  # Пропускаем пустые проекты
+                # Подсчитываем статистику по State для каждого проекта
+                project_df = df[df['Project'] == project_name]
+                state_stats = {}
+                if 'State' in df.columns:
+                    state_stats = project_df['State'].value_counts().to_dict()
+
+                projects.append({
+                    "name": str(project_name),
+                    "vulnerability_count": int(count),
+                    "state_distribution": state_stats
+                })
+
+        # Сортируем по количеству уязвимостей (по убыванию)
+        projects.sort(key=lambda x: x['vulnerability_count'], reverse=True)
+
+        return {
+            "status": "success",
+            "has_projects": True,
+            "total_projects": len(projects),
+            "total_rows": len(df),
+            "projects": projects
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/xlsx-to-vex/export-all-projects")
+async def xlsx_to_vex_export_all_projects(
+    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
+    product_version: str = None
+):
+    """
+    Генерирует отдельные VEX файлы для каждого проекта и возвращает ZIP архив
+
+    Args:
+        xlsx_file: XLSX файл с уязвимостями
+        product_version: Версия продукта (опционально)
+
+    Returns:
+        ZIP архив с VEX файлами для каждого проекта
+    """
+    try:
+        import zipfile
+        from io import BytesIO
+
+        # Читаем XLSX файл
+        df = read_file(xlsx_file)
+
+        # Проверяем наличие колонки Project
+        if 'Project' not in df.columns:
+            raise HTTPException(
+                status_code=400,
+                detail="XLSX file does not contain Project column"
+            )
+
+        # Получаем список уникальных проектов
+        projects = df['Project'].dropna().unique()
+
+        if len(projects) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No projects found in XLSX file"
+            )
+
+        # Создаем ZIP архив в памяти
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for project_name in projects:
+                try:
+                    # Конвертируем в VEX для каждого проекта
+                    vex_data = convert_xlsx_to_vex(
+                        df,
+                        product_name=str(project_name),
+                        product_version=product_version,
+                        project_filter=str(project_name)
+                    )
+
+                    # Преобразуем в JSON
+                    vex_json = json.dumps(vex_data, indent=2, ensure_ascii=False)
+
+                    # Генерируем имя файла
+                    safe_project_name = str(project_name).replace('/', '_').replace('\\', '_').replace(' ', '_')
+                    vex_filename = f"{safe_project_name}_vex.json"
+
+                    # Добавляем файл в ZIP
+                    zip_file.writestr(vex_filename, vex_json)
+
+                    print(f"  ✓ Generated VEX for project: {project_name} ({len(vex_data['vulnerabilities'])} vulnerabilities)")
+
+                except Exception as e:
+                    print(f"  ✗ Failed to generate VEX for project {project_name}: {str(e)}")
+                    # Продолжаем с другими проектами
+
+        # Логирование
+        print(f"\n{'='*80}")
+        print(f"📦 Generated VEX files for {len(projects)} projects")
+        print(f"  Source: {xlsx_file.filename}")
+        print(f"  Total rows: {len(df)}")
+        print(f"{'='*80}\n")
+
+        # Возвращаем ZIP архив
+        zip_buffer.seek(0)
+
+        original_name = xlsx_file.filename.replace('.xlsx', '').replace('.xls', '')
+        zip_filename = f"{original_name}_all_projects_vex.zip"
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
         )
 
     except Exception as e:
