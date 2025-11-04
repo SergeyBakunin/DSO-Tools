@@ -816,6 +816,8 @@ async def sbom_to_vex_export(
 @app.post("/api/xlsx-to-vex")
 async def xlsx_to_vex(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
+    product_name: str = Form(None),
+    product_version: str = Form(None),
     project_filter: str = Form(None)
 ):
     """
@@ -823,16 +825,16 @@ async def xlsx_to_vex(
 
     Args:
         xlsx_file: XLSX файл с уязвимостями
+        product_name: Название продукта (опционально). Если не указано, извлекается из файла
+        product_version: Версия продукта (опционально). Если не указано, извлекается из файла
         project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
-
-    Note: Информация о продукте (название, версия) извлекается строго из таблицы
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
-        # Конвертируем в VEX (без product_name/version - все из таблицы)
-        vex_data = convert_xlsx_to_vex(df, product_name=None, product_version=None, project_filter=project_filter)
+        # Конвертируем в VEX (product_name/version опциональны)
+        vex_data = convert_xlsx_to_vex(df, product_name=product_name, product_version=product_version, project_filter=project_filter)
 
         # Подсчитываем статистику по State
         state_stats = {}
@@ -900,23 +902,25 @@ async def xlsx_to_vex(
 @app.post("/api/xlsx-to-vex/export")
 async def xlsx_to_vex_export(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
+    product_name: str = Form(None),
+    product_version: str = Form(None),
     project_filter: str = Form(None)
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает JSON файл для скачивания
 
-    Note: Информация о продукте (название, версия) извлекается строго из таблицы
-
     Args:
         xlsx_file: XLSX файл с уязвимостями
+        product_name: Название продукта (опционально). Если не указано, извлекается из файла
+        product_version: Версия продукта (опционально). Если не указано, извлекается из файла
         project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
-        # Конвертируем в VEX (без product_name/version - все из таблицы)
-        vex_data = convert_xlsx_to_vex(df, product_name=None, product_version=None, project_filter=project_filter)
+        # Конвертируем в VEX (product_name/version опциональны)
+        vex_data = convert_xlsx_to_vex(df, product_name=product_name, product_version=product_version, project_filter=project_filter)
 
         # Преобразуем в JSON
         vex_json = json.dumps(vex_data, indent=2, ensure_ascii=False)
@@ -1015,15 +1019,15 @@ async def get_xlsx_projects(
 
 @app.post("/api/xlsx-to-vex/export-all-projects")
 async def xlsx_to_vex_export_all_projects(
-    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями")
+    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
+    product_version: str = Form(None)
 ):
     """
     Генерирует отдельные VEX файлы для каждого проекта и возвращает ZIP архив
 
-    Note: Информация о продукте (название, версия) извлекается строго из таблицы
-
     Args:
         xlsx_file: XLSX файл с уязвимостями
+        product_version: Версия продукта (опционально). Применяется ко всем проектам
 
     Returns:
         ZIP архив с VEX файлами для каждого проекта
@@ -1057,11 +1061,11 @@ async def xlsx_to_vex_export_all_projects(
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for project_name in projects:
                 try:
-                    # Конвертируем в VEX для каждого проекта (без product_name/version - все из таблицы)
+                    # Конвертируем в VEX для каждого проекта (используем имя проекта как product_name)
                     vex_data = convert_xlsx_to_vex(
                         df,
-                        product_name=None,
-                        product_version=None,
+                        product_name=None,  # Имя берется из проекта
+                        product_version=product_version,  # Версия опциональна
                         project_filter=str(project_name)
                     )
 
@@ -1100,6 +1104,225 @@ async def xlsx_to_vex_export_all_projects(
             headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
         )
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vex/validate")
+async def validate_vex(
+    vex_file: UploadFile = File(..., description="VEX файл в формате CycloneDX JSON")
+):
+    """
+    Валидирует VEX документ согласно спецификации CycloneDX 1.6
+
+    Args:
+        vex_file: JSON файл с VEX документом
+
+    Returns:
+        Результаты валидации с детальной информацией
+    """
+    try:
+        # Читаем содержимое файла
+        content = await vex_file.read()
+
+        try:
+            vex_data = json.loads(content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid JSON format: {str(e)}"
+            )
+
+        # Результаты валидации
+        validation_results = {
+            "is_valid": True,
+            "errors": [],
+            "warnings": [],
+            "info": {}
+        }
+
+        # Проверка базовой структуры CycloneDX
+        required_fields = ["bomFormat", "specVersion", "serialNumber", "version"]
+        for field in required_fields:
+            if field not in vex_data:
+                validation_results["errors"].append(f"Missing required field: {field}")
+                validation_results["is_valid"] = False
+
+        # Проверка bomFormat
+        if vex_data.get("bomFormat") != "CycloneDX":
+            validation_results["errors"].append(
+                f"Invalid bomFormat: expected 'CycloneDX', got '{vex_data.get('bomFormat')}'"
+            )
+            validation_results["is_valid"] = False
+
+        # Проверка specVersion
+        if vex_data.get("specVersion") != "1.6":
+            if vex_data.get("specVersion"):
+                validation_results["warnings"].append(
+                    f"SpecVersion is '{vex_data.get('specVersion')}', expected '1.6'"
+                )
+            else:
+                validation_results["errors"].append("Missing specVersion")
+                validation_results["is_valid"] = False
+
+        # Проверка serialNumber (должен быть URN UUID)
+        serial = vex_data.get("serialNumber", "")
+        if serial:
+            if not serial.startswith("urn:uuid:"):
+                validation_results["warnings"].append(
+                    "serialNumber should be a URN UUID (urn:uuid:...)"
+                )
+            validation_results["info"]["serial_number"] = serial
+
+        # Проверка version (должен быть integer >= 1)
+        version = vex_data.get("version")
+        if version is not None:
+            if not isinstance(version, int) or version < 1:
+                validation_results["errors"].append(
+                    f"Invalid version: must be integer >= 1, got {version}"
+                )
+                validation_results["is_valid"] = False
+            validation_results["info"]["version"] = version
+
+        # Проверка metadata
+        if "metadata" in vex_data:
+            metadata = vex_data["metadata"]
+
+            # Timestamp
+            if "timestamp" in metadata:
+                validation_results["info"]["timestamp"] = metadata["timestamp"]
+            else:
+                validation_results["warnings"].append("Missing metadata.timestamp")
+
+            # Tools
+            if "tools" in metadata:
+                tools = metadata.get("tools", {})
+                if "components" in tools:
+                    validation_results["info"]["tools_count"] = len(tools["components"])
+
+            # Component (product info)
+            if "component" in metadata:
+                component = metadata["component"]
+                if "name" in component:
+                    validation_results["info"]["product_name"] = component["name"]
+                if "version" in component:
+                    validation_results["info"]["product_version"] = component["version"]
+                if "type" not in component:
+                    validation_results["warnings"].append("metadata.component missing 'type'")
+            else:
+                validation_results["warnings"].append("Missing metadata.component (product info)")
+        else:
+            validation_results["warnings"].append("Missing metadata section")
+
+        # Проверка vulnerabilities
+        if "vulnerabilities" in vex_data:
+            vulns = vex_data["vulnerabilities"]
+            if not isinstance(vulns, list):
+                validation_results["errors"].append("vulnerabilities must be an array")
+                validation_results["is_valid"] = False
+            else:
+                validation_results["info"]["vulnerabilities_count"] = len(vulns)
+
+                # Детальная проверка уязвимостей
+                vex_states = {"affected", "not_affected", "exploitable", "in_triage", "false_positive", "resolved"}
+                vex_justifications = {
+                    "code_not_present", "code_not_reachable", "requires_configuration",
+                    "requires_dependency", "requires_environment", "protected_by_compiler",
+                    "protected_at_runtime", "protected_at_perimeter", "protected_by_mitigating_control"
+                }
+                vex_responses = {"can_not_fix", "will_not_fix", "update", "rollback", "workaround_available"}
+
+                state_distribution = {}
+                justification_distribution = {}
+                has_vex_analysis = 0
+                missing_vex_analysis = 0
+
+                for idx, vuln in enumerate(vulns):
+                    # Проверка обязательных полей vulnerability
+                    if "id" not in vuln:
+                        validation_results["errors"].append(f"Vulnerability #{idx}: missing 'id'")
+                        validation_results["is_valid"] = False
+
+                    # Проверка VEX analysis
+                    if "analysis" in vuln:
+                        has_vex_analysis += 1
+                        analysis = vuln["analysis"]
+
+                        # State (обязательное поле для VEX)
+                        if "state" in analysis:
+                            state = analysis["state"]
+                            state_distribution[state] = state_distribution.get(state, 0) + 1
+
+                            if state not in vex_states:
+                                validation_results["warnings"].append(
+                                    f"Vulnerability {vuln.get('id', f'#{idx}')}: invalid VEX state '{state}'"
+                                )
+                        else:
+                            validation_results["errors"].append(
+                                f"Vulnerability {vuln.get('id', f'#{idx}')}: analysis missing required 'state'"
+                            )
+                            validation_results["is_valid"] = False
+
+                        # Justification
+                        if "justification" in analysis:
+                            just = analysis["justification"]
+                            justification_distribution[just] = justification_distribution.get(just, 0) + 1
+
+                            if just not in vex_justifications:
+                                validation_results["warnings"].append(
+                                    f"Vulnerability {vuln.get('id', f'#{idx}')}: invalid justification '{just}'"
+                                )
+
+                        # Response
+                        if "response" in analysis:
+                            responses = analysis["response"]
+                            if isinstance(responses, list):
+                                for resp in responses:
+                                    if resp not in vex_responses:
+                                        validation_results["warnings"].append(
+                                            f"Vulnerability {vuln.get('id', f'#{idx}')}: invalid response '{resp}'"
+                                        )
+                            else:
+                                validation_results["warnings"].append(
+                                    f"Vulnerability {vuln.get('id', f'#{idx}')}: response should be an array"
+                                )
+                    else:
+                        missing_vex_analysis += 1
+
+                validation_results["info"]["has_vex_analysis"] = has_vex_analysis
+                validation_results["info"]["missing_vex_analysis"] = missing_vex_analysis
+
+                if state_distribution:
+                    validation_results["info"]["state_distribution"] = state_distribution
+                if justification_distribution:
+                    validation_results["info"]["justification_distribution"] = justification_distribution
+
+                if missing_vex_analysis > 0:
+                    validation_results["warnings"].append(
+                        f"{missing_vex_analysis} vulnerabilities missing VEX analysis section"
+                    )
+        else:
+            validation_results["warnings"].append("Missing vulnerabilities array")
+            validation_results["info"]["vulnerabilities_count"] = 0
+
+        # Проверка $schema
+        if "$schema" in vex_data:
+            schema_url = vex_data["$schema"]
+            if "1.6" not in schema_url:
+                validation_results["warnings"].append(
+                    f"Schema URL suggests different version: {schema_url}"
+                )
+            validation_results["info"]["schema"] = schema_url
+        else:
+            validation_results["warnings"].append("Missing $schema field")
+
+        # Финальный статус
+        validation_results["info"]["filename"] = vex_file.filename
+
+        return validation_results
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

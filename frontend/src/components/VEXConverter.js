@@ -8,6 +8,10 @@ const VEXConverter = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  // Опциональные поля для продукта
+  const [productName, setProductName] = useState('');
+  const [productVersion, setProductVersion] = useState('');
+
   // Новые состояния для работы с проектами
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('all'); // 'all' or project name
@@ -99,6 +103,12 @@ const VEXConverter = ({ onBack }) => {
       if (selectedProject && selectedProject !== 'all' && selectedProject !== 'all_separate') {
         formData.append('project_filter', selectedProject);
       }
+      if (productName) {
+        formData.append('product_name', productName);
+      }
+      if (productVersion) {
+        formData.append('product_version', productVersion);
+      }
 
       try {
         const response = await axios.post(`${API_URL}/api/xlsx-to-vex`, formData, {
@@ -140,11 +150,20 @@ const VEXConverter = ({ onBack }) => {
       // Если выбрано "Все проекты (отдельными файлами)", используем специальный эндпоинт
       if (selectedProject === 'all_separate') {
         formData.append('xlsx_file', sbomFile);
+        if (productVersion) {
+          formData.append('product_version', productVersion);
+        }
         endpoint = '/api/xlsx-to-vex/export-all-projects';
       } else {
         formData.append('xlsx_file', sbomFile);
         if (selectedProject && selectedProject !== 'all') {
           formData.append('project_filter', selectedProject);
+        }
+        if (productName) {
+          formData.append('product_name', productName);
+        }
+        if (productVersion) {
+          formData.append('product_version', productVersion);
         }
         endpoint = '/api/xlsx-to-vex/export';
       }
@@ -263,6 +282,41 @@ const VEXConverter = ({ onBack }) => {
                 </p>
               </>
             )}
+          </div>
+        )}
+
+        {fileType === 'xlsx' && (
+          <div className="product-info-section">
+            <h4>Информация о продукте (опционально):</h4>
+            <p className="field-hint">
+              Если не указано, информация о продукте будет извлечена из файла
+            </p>
+            <div className="input-group">
+              <label>
+                <strong>Название продукта:</strong>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="Например: My Application"
+                  disabled={loading}
+                  className="text-input"
+                />
+              </label>
+            </div>
+            <div className="input-group">
+              <label>
+                <strong>Версия продукта:</strong>
+                <input
+                  type="text"
+                  value={productVersion}
+                  onChange={(e) => setProductVersion(e.target.value)}
+                  placeholder="Например: 1.0.0"
+                  disabled={loading}
+                  className="text-input"
+                />
+              </label>
+            </div>
           </div>
         )}
       </div>
