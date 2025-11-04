@@ -816,8 +816,6 @@ async def sbom_to_vex_export(
 @app.post("/api/xlsx-to-vex")
 async def xlsx_to_vex(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
-    product_name: str = None,
-    product_version: str = None,
     project_filter: str = None
 ):
     """
@@ -825,16 +823,16 @@ async def xlsx_to_vex(
 
     Args:
         xlsx_file: XLSX файл с уязвимостями
-        product_name: Название продукта (опционально)
-        product_version: Версия продукта (опционально)
         project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
+
+    Note: Информация о продукте (название, версия) извлекается строго из таблицы
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
-        # Конвертируем в VEX
-        vex_data = convert_xlsx_to_vex(df, product_name, product_version, project_filter)
+        # Конвертируем в VEX (без product_name/version - все из таблицы)
+        vex_data = convert_xlsx_to_vex(df, product_name=None, product_version=None, project_filter=project_filter)
 
         # Подсчитываем статистику по State
         state_stats = {}
@@ -902,25 +900,23 @@ async def xlsx_to_vex(
 @app.post("/api/xlsx-to-vex/export")
 async def xlsx_to_vex_export(
     xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
-    product_name: str = None,
-    product_version: str = None,
     project_filter: str = None
 ):
     """
     Конвертирует XLSX файл с уязвимостями в VEX формат и возвращает JSON файл для скачивания
 
+    Note: Информация о продукте (название, версия) извлекается строго из таблицы
+
     Args:
         xlsx_file: XLSX файл с уязвимостями
-        product_name: Название продукта (опционально)
-        product_version: Версия продукта (опционально)
         project_filter: Фильтр по проекту (опционально). Если указано, экспортируются только уязвимости этого проекта
     """
     try:
         # Читаем XLSX файл
         df = read_file(xlsx_file)
 
-        # Конвертируем в VEX
-        vex_data = convert_xlsx_to_vex(df, product_name, product_version, project_filter)
+        # Конвертируем в VEX (без product_name/version - все из таблицы)
+        vex_data = convert_xlsx_to_vex(df, product_name=None, product_version=None, project_filter=project_filter)
 
         # Преобразуем в JSON
         vex_json = json.dumps(vex_data, indent=2, ensure_ascii=False)
@@ -1019,15 +1015,15 @@ async def get_xlsx_projects(
 
 @app.post("/api/xlsx-to-vex/export-all-projects")
 async def xlsx_to_vex_export_all_projects(
-    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями"),
-    product_version: str = None
+    xlsx_file: UploadFile = File(..., description="XLSX файл с уязвимостями")
 ):
     """
     Генерирует отдельные VEX файлы для каждого проекта и возвращает ZIP архив
 
+    Note: Информация о продукте (название, версия) извлекается строго из таблицы
+
     Args:
         xlsx_file: XLSX файл с уязвимостями
-        product_version: Версия продукта (опционально)
 
     Returns:
         ZIP архив с VEX файлами для каждого проекта
@@ -1061,11 +1057,11 @@ async def xlsx_to_vex_export_all_projects(
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for project_name in projects:
                 try:
-                    # Конвертируем в VEX для каждого проекта
+                    # Конвертируем в VEX для каждого проекта (без product_name/version - все из таблицы)
                     vex_data = convert_xlsx_to_vex(
                         df,
-                        product_name=str(project_name),
-                        product_version=product_version,
+                        product_name=None,
+                        product_version=None,
                         project_filter=str(project_name)
                     )
 
@@ -1101,7 +1097,7 @@ async def xlsx_to_vex_export_all_projects(
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
+            headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
         )
 
     except Exception as e:
