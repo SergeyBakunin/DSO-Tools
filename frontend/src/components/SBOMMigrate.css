@@ -320,3 +320,50 @@
     gap: 8px;
   }
 }
+
+/* VEX Section Styles */
+.vex-section {
+  margin: 25px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.vex-section h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 18px;
+}
+
+.vex-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.vex-stat {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+
+.vex-icon {
+  margin-right: 10px;
+  font-size: 20px;
+}
+
+.vex-stat span:last-child {
+  color: #34495e;
+  font-size: 14px;
+}
+
+.vex-stat strong {
+  color: #667eea;
+  font-size: 18px;
+  margin-left: 5px;
+}
+

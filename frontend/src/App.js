@@ -18,7 +18,7 @@ function App() {
     },
     {
       id: 'vex-converter',
-      title: 'VEX Converter',
+      title: 'Конвертер VEX',
       icon: '📋',
       description: 'Преобразование CycloneDX SBOM в формат VEX (Vulnerability Exploitability eXchange)',
       component: VEXConverter,
@@ -26,7 +26,7 @@ function App() {
     },
     {
       id: 'vex-validator',
-      title: 'VEX Validator',
+      title: 'Валидатор VEX',
       icon: '✅',
       description: 'Валидация VEX документов согласно стандарту CycloneDX 1.6',
       component: VEXValidator,
