@@ -51,7 +51,7 @@ const VEXValidator = ({ onBack }) => {
       </button>
 
       <div className="tool-header">
-        <h2>✅ VEX Validator</h2>
+        <h2>✅ Валидатор VEX</h2>
         <p>Валидация VEX документов согласно стандарту CycloneDX 1.6</p>
       </div>
 

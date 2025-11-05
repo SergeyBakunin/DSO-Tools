@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
 import json
-from typing import List, Dict, Any
+from typing import Dict, Any
 from datetime import datetime
 import uuid
 
@@ -34,14 +34,14 @@ def read_file(file: UploadFile) -> pd.DataFrame:
 
 def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[pd.DataFrame, Dict[str, Any]]:
     """
-    Переносит комментарии из source_df в target_df по совпадению CVE ID и Project
+    Переносит комментарии и VEX-поля (State, Justification, Response, Detail) из source_df в target_df по совпадению CVE ID и Project
 
     Args:
-        source_df: Таблица 1 с комментариями (старая выгрузка)
+        source_df: Таблица 1 с комментариями и VEX-полями (старая выгрузка)
         target_df: Таблица 2 (новая выгрузка)
 
     Returns:
-        tuple: (DataFrame с перенесёнными комментариями, Отчет о миграции)
+        tuple: (DataFrame с перенесёнными комментариями и VEX-полями, Отчет о миграции)
     """
     # Создаём копию target_df
     result_df = target_df.copy()
@@ -58,10 +58,18 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
         "errors": []
     }
 
-    # Если в target_df нет столбца Comment, создаём его
+    # VEX поля для миграции
+    vex_fields = ['State', 'Justification', 'Response', 'Detail']
+
+    # Создаём VEX-колонки в target, если их нет
+    for vex_field in vex_fields:
+        if vex_field not in result_df.columns:
+            result_df[vex_field] = ''
+            migration_log["warnings"].append(f"Столбец '{vex_field}' не найден в целевом файле. Создан новый столбец.")
+
+    # Создаём Comment колонку в target, если её нет (опционально)
     if 'Comment' not in result_df.columns:
         result_df['Comment'] = ''
-        migration_log["warnings"].append("Столбец 'Comment' не найден в целевом файле. Создан новый столбец.")
 
     # Нормализуем названия столбцов для поиска
     source_cols = {col.lower().strip(): col for col in source_df.columns}
@@ -72,14 +80,26 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
     project_col_source = source_cols.get('project')
     comment_col_source = source_cols.get('comment')
 
+    # VEX колонки в source (поиск по названию с учетом регистра)
+    state_col_source = source_cols.get('state')
+    justification_col_source = source_cols.get('justification')
+    response_col_source = source_cols.get('response')
+    detail_col_source = source_cols.get('detail')
+
     cve_col_target = target_cols.get('cve id') or target_cols.get('cve')
     project_col_target = target_cols.get('project')
     comment_col_target = target_cols.get('comment')
 
-    if not all([cve_col_source, project_col_source, comment_col_source]):
+    # VEX колонки в target
+    state_col_target = target_cols.get('state')
+    justification_col_target = target_cols.get('justification')
+    response_col_target = target_cols.get('response')
+    detail_col_target = target_cols.get('detail')
+
+    if not all([cve_col_source, project_col_source]):
         raise HTTPException(
             status_code=400,
-            detail=f"Source file missing required columns (CVE ID, Project, Comment). Found: {list(source_df.columns)}"
+            detail=f"Source file missing required columns (CVE ID, Project). Found: {list(source_df.columns)}"
         )
 
     if not all([cve_col_target, project_col_target]):
@@ -88,31 +108,46 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
             detail=f"Target file missing required columns (CVE ID, Project). Found: {list(result_df.columns)}"
         )
 
+    # Предупреждение если Comment колонка отсутствует в source
+    if not comment_col_source:
+        migration_log["warnings"].append("Столбец 'Comment' не найден в исходном файле. Будут мигрированы только VEX-поля.")
+
     # Статистика исходных файлов
     migration_log["source_stats"] = {
         "total_rows": len(source_df),
         "cve_column": cve_col_source,
         "project_column": project_col_source,
-        "comment_column": comment_col_source
+        "comment_column": comment_col_source,
+        "vex_columns": {
+            "state": state_col_source,
+            "justification": justification_col_source,
+            "response": response_col_source,
+            "detail": detail_col_source
+        }
     }
 
     migration_log["target_stats"] = {
         "total_rows": len(target_df),
         "cve_column": cve_col_target,
         "project_column": project_col_target,
-        "comment_column": comment_col_target
+        "comment_column": comment_col_target,
+        "vex_columns": {
+            "state": state_col_target,
+            "justification": justification_col_target,
+            "response": response_col_target,
+            "detail": detail_col_target
+        }
     }
 
-    # Создаём словарь для быстрого поиска комментариев
-    # Ключ: (CVE ID, Project), Значение: Comment
-    comment_map = {}
+    # Создаём словарь для быстрого поиска комментариев и VEX-полей
+    # Ключ: (CVE ID, Project), Значение: dict с полями
+    data_map = {}
     source_projects = set()
     skipped_source_rows = 0
 
     for idx, row in source_df.iterrows():
         cve_id = str(row[cve_col_source]).strip() if pd.notna(row[cve_col_source]) else ''
         project = str(row[project_col_source]).strip() if pd.notna(row[project_col_source]) else ''
-        comment = str(row[comment_col_source]).strip() if pd.notna(row[comment_col_source]) else ''
 
         if project:
             source_projects.add(project)
@@ -121,17 +156,44 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
             skipped_source_rows += 1
             continue
 
-        if comment:
-            key = (cve_id, project)
-            comment_map[key] = comment
+        key = (cve_id, project)
+        data_map[key] = {}
+
+        # Добавляем Comment
+        if comment_col_source and pd.notna(row.get(comment_col_source)):
+            comment = str(row[comment_col_source]).strip()
+            if comment:
+                data_map[key]['comment'] = comment
+
+        # Добавляем VEX-поля
+        if state_col_source and pd.notna(row.get(state_col_source)):
+            state = str(row[state_col_source]).strip()
+            if state:
+                data_map[key]['state'] = state
+
+        if justification_col_source and pd.notna(row.get(justification_col_source)):
+            justification = str(row[justification_col_source]).strip()
+            if justification:
+                data_map[key]['justification'] = justification
+
+        if response_col_source and pd.notna(row.get(response_col_source)):
+            response = str(row[response_col_source]).strip()
+            if response:
+                data_map[key]['response'] = response
+
+        if detail_col_source and pd.notna(row.get(detail_col_source)):
+            detail = str(row[detail_col_source]).strip()
+            if detail:
+                data_map[key]['detail'] = detail
 
     if skipped_source_rows > 0:
         migration_log["warnings"].append(
             f"Пропущено {skipped_source_rows} строк в исходном файле (отсутствует CVE ID или Project)"
         )
 
-    # Переносим комментарии и собираем статистику
+    # Переносим комментарии, VEX-поля и собираем статистику
     matched_count = 0
+    vex_migrated_count = {'state': 0, 'justification': 0, 'response': 0, 'detail': 0}
     target_projects = set()
     skipped_target_rows = 0
     new_cves = []  # CVE, которые есть в target, но нет в source
@@ -148,9 +210,30 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
             continue
 
         key = (cve_id, project)
-        if key in comment_map:
-            result_df.at[idx, comment_col_target] = comment_map[key]
-            matched_count += 1
+        if key in data_map:
+            data = data_map[key]
+
+            # Переносим Comment
+            if 'comment' in data:
+                result_df.at[idx, comment_col_target] = data['comment']
+                matched_count += 1
+
+            # Переносим VEX-поля
+            if 'state' in data and state_col_target:
+                result_df.at[idx, state_col_target] = data['state']
+                vex_migrated_count['state'] += 1
+
+            if 'justification' in data and justification_col_target:
+                result_df.at[idx, justification_col_target] = data['justification']
+                vex_migrated_count['justification'] += 1
+
+            if 'response' in data and response_col_target:
+                result_df.at[idx, response_col_target] = data['response']
+                vex_migrated_count['response'] += 1
+
+            if 'detail' in data and detail_col_target:
+                result_df.at[idx, detail_col_target] = data['detail']
+                vex_migrated_count['detail'] += 1
         else:
             # Проверяем, новый ли это CVE
             source_has_cve = any(cve_id == str(r[cve_col_source]).strip()
@@ -179,8 +262,9 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
     # Статистика миграции
     migration_log["migration_stats"] = {
         "comments_migrated": matched_count,
-        "comments_available_in_source": len(comment_map),
-        "migration_rate_percent": round((matched_count / len(comment_map) * 100) if len(comment_map) > 0 else 0, 2),
+        "comments_available_in_source": len(data_map),
+        "migration_rate_percent": round((matched_count / len(data_map) * 100) if len(data_map) > 0 else 0, 2),
+        "vex_fields_migrated": vex_migrated_count,
         "unique_projects_in_source": len(source_projects),
         "unique_projects_in_target": len(target_projects),
         "common_projects": len(common_projects),
@@ -195,10 +279,11 @@ def migrate_comments(source_df: pd.DataFrame, target_df: pd.DataFrame) -> tuple[
             f"Найдено {len(new_cves)} новых CVE в целевом файле (отсутствуют в исходном). Это нормально для новой версии выгрузки."
         )
 
-    print(f"✅ Migrated {matched_count} comments from {len(comment_map)} available")
-    print(f"📊 Common projects: {len(common_projects)}")
-    print(f"⚠️  Projects only in source: {len(projects_only_in_source)}")
-    print(f"✨ New CVEs in target: {len(new_cves)}")
+    print(f"[OK] Migrated {matched_count} comments from {len(data_map)} available")
+    print(f"[VEX] Fields migrated: State={vex_migrated_count['state']}, Justification={vex_migrated_count['justification']}, Response={vex_migrated_count['response']}, Detail={vex_migrated_count['detail']}")
+    print(f"[PROJECTS] Common projects: {len(common_projects)}")
+    print(f"[WARN] Projects only in source: {len(projects_only_in_source)}")
+    print(f"[NEW] New CVEs in target: {len(new_cves)}")
 
     return result_df, migration_log
 
@@ -661,7 +746,7 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
 
 @app.get("/")
 async def root():
-    return {"message": "DevSecOps Tools API", "version": "1.0.0"}
+    return {"message": "DevSecOps Tools API", "version": "1.3.0"}
 
 
 @app.post("/api/sbom-migrate")
@@ -675,11 +760,18 @@ async def sbom_migrate(
     """
     try:
         # Читаем файлы
+        print(f"[MIGRATE] Reading source file: {source_file.filename}")
         source_df = read_file(source_file)
+        print(f"[MIGRATE] Source file loaded: {len(source_df)} rows, columns: {list(source_df.columns)}")
+
+        print(f"[MIGRATE] Reading target file: {target_file.filename}")
         target_df = read_file(target_file)
+        print(f"[MIGRATE] Target file loaded: {len(target_df)} rows, columns: {list(target_df.columns)}")
 
         # Выполняем миграцию с логированием
+        print("[MIGRATE] Starting migration...")
         result_df, migration_log = migrate_comments(source_df, target_df)
+        print("[MIGRATE] Migration completed successfully")
 
         # Добавляем информацию о файлах
         migration_log["source_filename"] = source_file.filename
@@ -689,8 +781,13 @@ async def sbom_migrate(
 
         return migration_log
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[ERROR] Migration failed: {error_details}")
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n\nDetailed trace:\n{error_details}")
 
 
 @app.post("/api/sbom-migrate/export")

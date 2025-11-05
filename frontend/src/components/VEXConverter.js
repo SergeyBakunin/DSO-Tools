@@ -224,7 +224,7 @@ const VEXConverter = ({ onBack }) => {
       </button>
 
       <div className="tool-header">
-        <h2>📋 VEX Converter</h2>
+        <h2>📋 Конвертер VEX</h2>
         <p>Конвертация SBOM или XLSX в формат VEX (Vulnerability Exploitability eXchange)</p>
       </div>
 

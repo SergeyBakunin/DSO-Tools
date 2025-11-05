@@ -129,6 +129,31 @@ const SBOMMigrate = ({ onBack }) => {
           </div>
         </div>
 
+        {/* VEX Fields Statistics */}
+        {migration_stats.vex_fields_migrated && (
+          <div className="vex-section">
+            <h4>📋 VEX-поля перенесены</h4>
+            <div className="vex-stats">
+              <div className="vex-stat">
+                <span className="vex-icon">🔵</span>
+                <span>State: <strong>{migration_stats.vex_fields_migrated.state}</strong></span>
+              </div>
+              <div className="vex-stat">
+                <span className="vex-icon">🟡</span>
+                <span>Justification: <strong>{migration_stats.vex_fields_migrated.justification}</strong></span>
+              </div>
+              <div className="vex-stat">
+                <span className="vex-icon">🟢</span>
+                <span>Response: <strong>{migration_stats.vex_fields_migrated.response}</strong></span>
+              </div>
+              <div className="vex-stat">
+                <span className="vex-icon">🟣</span>
+                <span>Detail: <strong>{migration_stats.vex_fields_migrated.detail}</strong></span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Проекты */}
         <div className="projects-section">
           <h4>🗂️ Статистика по проектам</h4>
