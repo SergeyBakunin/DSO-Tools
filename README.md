@@ -11,11 +11,19 @@
 
 ## 🚀 Быстрый старт
 
+### Самый простой способ (Windows):
+
+```cmd
+START.bat
+```
+
+Откройте http://localhost:3000
+
 ### Вариант 1: Docker (рекомендуется)
 
 ```bash
-# Одна команда для запуска всего приложения
-docker-compose -f docker/docker-compose.yml up -d
+cd docker
+docker-compose up -d
 ```
 
 Откройте http://localhost:3000
@@ -34,7 +42,7 @@ npm start
 
 Откройте http://localhost:3000
 
-📖 **Подробнее:** [QUICK_START.md](QUICK_START.md)
+📖 **Подробнее:** [QUICK_START.md](QUICK_START.md) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
 
 ---
 
@@ -524,16 +532,41 @@ docker run -d -p 3000:80 devsecops-tools-frontend:1.0.0
 
 ---
 
+## 🌐 Доступ из локальной сети
+
+### Быстрая настройка:
+
+1. **Откройте Firewall (PowerShell от администратора):**
+   ```powershell
+   New-NetFirewallRule -DisplayName "DevSecOps Frontend" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
+   New-NetFirewallRule -DisplayName "DevSecOps Backend" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+   ```
+
+2. **Узнайте IP вашего ноутбука:**
+   ```powershell
+   ipconfig
+   ```
+   Найдите **IPv4 Address** (например: 192.168.1.100)
+
+3. **Подключитесь с другого устройства:**
+   ```
+   http://192.168.1.100:3000
+   ```
+
+📖 **Подробное руководство:** [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
+---
+
 ## 📞 Контакты и поддержка
 
-- **Документация:** См. папку `/docs`
-- **Вопросы:** Создайте Issue на GitHub
-- **Email:** your.email@example.com
+- **Документация:** [QUICK_START.md](QUICK_START.md) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+- **Инструкции:** См. папку `/instructions`
+- **Автор:** Sergey Bakunin
 
 ---
 
 **Версия:** 1.3.0
-**Последнее обновление:** 5 ноября 2025
+**Последнее обновление:** 26 ноября 2025
 **Статус:** Active Development
 
 ---

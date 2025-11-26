@@ -719,14 +719,14 @@ def convert_xlsx_to_vex(df: pd.DataFrame, product_name: str = None, product_vers
             if justification_str in valid_justifications:
                 analysis["justification"] = justification_str
 
-        # Response (опционально)
+        # Response (опционально) - ДОЛЖЕН БЫТЬ МАССИВОМ согласно CycloneDX VEX спецификации
         response = row.get('Response')
         if not pd.isna(response):
             response_str = str(response).strip()
             # Валидные значения: can_not_fix, will_not_fix, update, rollback, workaround_available
             valid_responses = ['can_not_fix', 'will_not_fix', 'update', 'rollback', 'workaround_available']
             if response_str in valid_responses:
-                analysis["response"] = response_str
+                analysis["response"] = [response_str]  # Преобразуем в массив
 
         # Detail (дополнительная информация)
         # ВАЖНО: поле detail должно содержать только человекочитаемое объяснение анализа,
