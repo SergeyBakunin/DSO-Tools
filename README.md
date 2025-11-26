@@ -114,7 +114,7 @@ npm start
 
 ### Дополнительно:
 - 🐳 [Docker Guide](instructions/DOCKER_GUIDE.md) - работа с Docker
-- 🏠 [NAS Deployment](instructions/NAS_DEPLOYMENT_GUIDE.md) - развертывание на Synology NAS
+- 🚀 [Deployment Guide](DEPLOYMENT_GUIDE.md) - полное руководство по развертыванию
 
 ---
 
@@ -223,18 +223,18 @@ sbom-tools/
 │   ├── public/
 │   └── package.json
 ├── docker/                     # Docker конфигурация
-│   ├── docker-compose.yml     # Основная конфигурация
-│   ├── docker-compose.nas.yml # Для NAS
-│   └── docker-compose.dockerhub.yml # Для Docker Hub
-├── scripts/                    # Скрипты запуска
-│   ├── start-backend.bat
-│   └── start-frontend.bat
+│   └── docker-compose.yml     # Docker Compose файл
 ├── instructions/               # Документация
 │   ├── CHANGELOG.md
+│   ├── DOCKER_GUIDE.md
 │   ├── TECHNICAL_NOTES.md
 │   ├── PROJECT_STATUS.md
 │   └── VEX_CONVERTER_README.md
-└── README.md                  # Этот файл
+├── START.bat                   # Быстрый запуск (Windows)
+├── STOP.bat                    # Остановка приложения
+├── DEPLOYMENT_GUIDE.md         # Руководство по развертыванию
+├── QUICK_START.md              # Быстрый старт
+└── README.md                   # Этот файл
 ```
 
 ---
@@ -498,7 +498,7 @@ docker run -d -p 3000:80 devsecops-tools-frontend:1.0.0
 
 Нет критических проблем.
 
-Сообщить о проблеме: [GitHub Issues](https://github.com/username/devsecops-tools/issues)
+Сообщить о проблеме: [GitHub Issues](https://github.com/SergeyBakunin/DSO-Tools/issues)
 
 ---
 
@@ -518,8 +518,7 @@ docker run -d -p 3000:80 devsecops-tools-frontend:1.0.0
 
 **Sergey Bakunin**
 
-- 📧 Email: your.email@example.com
-- 💼 GitHub: [@username](https://github.com/username)
+- 💼 GitHub: [@SergeyBakunin](https://github.com/SergeyBakunin)
 
 ---
 
@@ -528,7 +527,7 @@ docker run -d -p 3000:80 devsecops-tools-frontend:1.0.0
 - FastAPI за отличный фреймворк
 - React за мощный UI фреймворк
 - Pandas за обработку данных
-- Claude AI за помощь в разработке
+- CycloneDX за стандарт VEX
 
 ---
 
