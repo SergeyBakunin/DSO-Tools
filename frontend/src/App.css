@@ -752,3 +752,114 @@
   color: #9ca3af;
 }
 
+/* SBOM Merger styles */
+.info-section {
+  background: #f0f4ff;
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  border-left: 4px solid #667eea;
+}
+
+.info-section h3 {
+  margin-top: 0;
+  color: #667eea;
+  font-size: 1.3rem;
+}
+
+.info-section ol {
+  margin: 15px 0;
+  padding-left: 25px;
+}
+
+.info-section ol li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.example-structure {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.example-structure strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #667eea;
+}
+
+.example-structure pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 20px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.stat-item {
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.stat-value.success {
+  color: #10b981;
+}
+
+.stat-value.warning {
+  color: #f59e0b;
+}
+
+.stat-value.error {
+  color: #ef4444;
+}
+
+.folder-details {
+  margin-top: 30px;
+}
+
+.folder-details h4 {
+  margin-bottom: 15px;
+  color: #334155;
+}
+
+.next-steps {
+  margin-top: 25px;
+  padding: 20px;
+  background: #ecfdf5;
+  border-radius: 10px;
+  border-left: 4px solid #10b981;
+}
+
+.next-steps p {
+  margin: 0;
+  color: #065f46;
+}
+

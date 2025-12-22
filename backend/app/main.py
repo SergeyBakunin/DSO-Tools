@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
 import json
+import os
 from typing import Dict, Any
 from datetime import datetime
 import uuid
@@ -1426,6 +1427,364 @@ async def validate_vex(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sbom-merge")
+async def sbom_merge(
+    zip_file: UploadFile = File(..., description="ZIP архив с папками SBOM файлов")
+):
+    """
+    Объединяет SBOM файлы из ZIP архива
+
+    Структура ZIP:
+    archive.zip/
+      ├── project1/
+      │   ├── sbom1.json
+      │   └── sbom2.json
+      ├── project2/
+      │   └── sbom.json
+
+    Результат: ZIP архив с объединёнными SBOM для каждой папки
+    """
+    import zipfile
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    try:
+        # Создаём временные директории
+        temp_dir = tempfile.mkdtemp()
+        extract_dir = Path(temp_dir) / "extracted"
+        merged_dir = Path(temp_dir) / "merged"
+        extract_dir.mkdir(parents=True)
+        merged_dir.mkdir(parents=True)
+
+        # Читаем и распаковываем ZIP
+        content = await zip_file.read()
+        zip_path = Path(temp_dir) / "upload.zip"
+        zip_path.write_bytes(content)
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+
+        # Статистика
+        stats = {
+            "total_folders": 0,
+            "processed_folders": 0,
+            "skipped_folders": 0,
+            "failed_folders": 0,
+            "folder_details": []
+        }
+
+        # Обрабатываем папки
+        for folder_path in extract_dir.iterdir():
+            if not folder_path.is_dir():
+                continue
+
+            if folder_path.name.startswith('.') or folder_path.name.startswith('__'):
+                continue
+
+            folder_name = folder_path.name
+            stats["total_folders"] += 1
+
+            # Находим все JSON файлы
+            json_files = list(folder_path.glob("*.json"))
+
+            if len(json_files) == 0:
+                stats["skipped_folders"] += 1
+                stats["folder_details"].append({
+                    "folder": folder_name,
+                    "status": "skipped",
+                    "reason": "No JSON files found",
+                    "files_count": 0
+                })
+                continue
+
+            # Создаём выходную директорию
+            output_folder = merged_dir / folder_name
+            output_folder.mkdir(parents=True, exist_ok=True)
+            output_file = output_folder / f"{folder_name}.json"
+
+            # Если один файл - копируем
+            if len(json_files) == 1:
+                shutil.copy2(json_files[0], output_file)
+                stats["processed_folders"] += 1
+                stats["folder_details"].append({
+                    "folder": folder_name,
+                    "status": "copied",
+                    "files_count": 1,
+                    "output": f"{folder_name}.json"
+                })
+            else:
+                # Если несколько - объединяем
+                try:
+                    # Читаем все JSON файлы
+                    sboms = []
+                    for json_file in json_files:
+                        with open(json_file, 'r', encoding='utf-8') as f:
+                            sbom_data = json.load(f)
+                            sboms.append(sbom_data)
+
+                    # Объединяем SBOM (простое объединение)
+                    merged_sbom = merge_cyclonedx_sboms(sboms, folder_name)
+
+                    # Сохраняем результат
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        json.dump(merged_sbom, f, indent=2, ensure_ascii=False)
+
+                    stats["processed_folders"] += 1
+                    stats["folder_details"].append({
+                        "folder": folder_name,
+                        "status": "merged",
+                        "files_count": len(json_files),
+                        "output": f"{folder_name}.json"
+                    })
+                except Exception as e:
+                    stats["failed_folders"] += 1
+                    stats["folder_details"].append({
+                        "folder": folder_name,
+                        "status": "failed",
+                        "files_count": len(json_files),
+                        "error": str(e)
+                    })
+
+        # Создаём ZIP с результатами
+        output_zip_path = Path(temp_dir) / "merged_sboms.zip"
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(merged_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(merged_dir)
+                    zipf.write(file_path, arcname)
+
+        # Очищаем временные файлы
+        shutil.rmtree(temp_dir)
+
+        # Возвращаем статистику
+        return {
+            "status": "success",
+            "statistics": stats,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid ZIP file")
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n\nDetails:\n{error_details}")
+
+
+@app.post("/api/sbom-merge/export")
+async def sbom_merge_export(
+    zip_file: UploadFile = File(..., description="ZIP архив с папками SBOM файлов")
+):
+    """
+    Объединяет SBOM файлы и возвращает ZIP архив с результатами
+    """
+    import zipfile
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    try:
+        # Создаём временные директории
+        temp_dir = tempfile.mkdtemp()
+        extract_dir = Path(temp_dir) / "extracted"
+        merged_dir = Path(temp_dir) / "merged"
+        extract_dir.mkdir(parents=True)
+        merged_dir.mkdir(parents=True)
+
+        # Читаем и распаковываем ZIP
+        content = await zip_file.read()
+        zip_path = Path(temp_dir) / "upload.zip"
+        zip_path.write_bytes(content)
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+
+        # Обрабатываем папки
+        processed_count = 0
+
+        for folder_path in extract_dir.iterdir():
+            if not folder_path.is_dir():
+                continue
+
+            if folder_path.name.startswith('.') or folder_path.name.startswith('__'):
+                continue
+
+            folder_name = folder_path.name
+
+            # Находим все JSON файлы
+            json_files = list(folder_path.glob("*.json"))
+
+            if len(json_files) == 0:
+                continue
+
+            # Создаём выходную директорию
+            output_folder = merged_dir / folder_name
+            output_folder.mkdir(parents=True, exist_ok=True)
+            output_file = output_folder / f"{folder_name}.json"
+
+            # Если один файл - копируем
+            if len(json_files) == 1:
+                shutil.copy2(json_files[0], output_file)
+                processed_count += 1
+            else:
+                # Если несколько - объединяем
+                try:
+                    # Читаем все JSON файлы
+                    sboms = []
+                    for json_file in json_files:
+                        with open(json_file, 'r', encoding='utf-8') as f:
+                            sbom_data = json.load(f)
+                            sboms.append(sbom_data)
+
+                    # Объединяем SBOM
+                    merged_sbom = merge_cyclonedx_sboms(sboms, folder_name)
+
+                    # Сохраняем результат
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        json.dump(merged_sbom, f, indent=2, ensure_ascii=False)
+
+                    processed_count += 1
+                except Exception as e:
+                    print(f"Error merging {folder_name}: {e}")
+                    continue
+
+        # Создаём ZIP с результатами
+        output_zip_path = Path(temp_dir) / "merged_sboms.zip"
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(merged_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(merged_dir)
+                    zipf.write(file_path, arcname)
+
+        # Читаем ZIP для отправки
+        result_content = output_zip_path.read_bytes()
+
+        # Очищаем временные файлы
+        shutil.rmtree(temp_dir)
+
+        # Возвращаем ZIP файл
+        output = io.BytesIO(result_content)
+        output.seek(0)
+
+        original_name = zip_file.filename.replace('.zip', '')
+        result_filename = f"{original_name}_merged.zip"
+
+        return StreamingResponse(
+            output,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{result_filename}"'}
+        )
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid ZIP file")
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n\nDetails:\n{error_details}")
+
+
+def merge_cyclonedx_sboms(sboms: list, project_name: str) -> Dict[str, Any]:
+    """
+    Объединяет несколько CycloneDX SBOM в один
+
+    Args:
+        sboms: Список SBOM документов
+        project_name: Имя проекта
+
+    Returns:
+        Объединённый SBOM документ
+    """
+    # Базовая структура
+    merged = {
+        "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "serialNumber": f"urn:uuid:{uuid.uuid4()}",
+        "version": 1,
+        "metadata": {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "tools": {
+                "components": [
+                    {
+                        "type": "application",
+                        "name": "DevSecOps Tools - SBOM Merger",
+                        "version": "1.3.0",
+                        "description": "Merges multiple CycloneDX SBOM files"
+                    }
+                ]
+            },
+            "component": {
+                "type": "application",
+                "name": project_name,
+                "bom-ref": f"pkg:app/{project_name}"
+            }
+        },
+        "components": [],
+        "dependencies": []
+    }
+
+    # Множества для отслеживания уникальных элементов
+    seen_components = set()
+    seen_vulnerabilities = set()
+    components_list = []
+    vulnerabilities_list = []
+    dependencies_map = {}
+
+    # Объединяем компоненты и уязвимости из всех SBOM
+    for sbom in sboms:
+        # Копируем metadata из первого SBOM (если есть)
+        if sbom.get("metadata") and not merged["metadata"].get("component").get("version"):
+            if "component" in sbom["metadata"]:
+                if "version" in sbom["metadata"]["component"]:
+                    merged["metadata"]["component"]["version"] = sbom["metadata"]["component"]["version"]
+
+        # Объединяем компоненты
+        if "components" in sbom:
+            for component in sbom["components"]:
+                comp_ref = component.get("bom-ref") or f"{component.get('name')}@{component.get('version')}"
+                if comp_ref not in seen_components:
+                    seen_components.add(comp_ref)
+                    components_list.append(component)
+
+        # Объединяем уязвимости
+        if "vulnerabilities" in sbom:
+            for vuln in sbom["vulnerabilities"]:
+                vuln_ref = vuln.get("bom-ref") or vuln.get("id")
+                if vuln_ref not in seen_vulnerabilities:
+                    seen_vulnerabilities.add(vuln_ref)
+                    vulnerabilities_list.append(vuln)
+
+        # Объединяем зависимости
+        if "dependencies" in sbom:
+            for dep in sbom["dependencies"]:
+                ref = dep.get("ref")
+                if ref:
+                    if ref not in dependencies_map:
+                        dependencies_map[ref] = set()
+                    if "dependsOn" in dep:
+                        dependencies_map[ref].update(dep["dependsOn"])
+
+    # Добавляем компоненты
+    if components_list:
+        merged["components"] = components_list
+
+    # Добавляем уязвимости
+    if vulnerabilities_list:
+        merged["vulnerabilities"] = vulnerabilities_list
+
+    # Добавляем зависимости
+    if dependencies_map:
+        merged["dependencies"] = [
+            {"ref": ref, "dependsOn": list(deps)}
+            for ref, deps in dependencies_map.items()
+        ]
+
+    return merged
 
 
 if __name__ == "__main__":

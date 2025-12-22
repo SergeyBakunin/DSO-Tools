@@ -3,6 +3,7 @@ import './App.css';
 import SBOMMigrate from './components/SBOMMigrate';
 import VEXConverter from './components/VEXConverter';
 import VEXValidator from './components/VEXValidator';
+import SBOMMerger from './components/SBOMMerger';
 
 function App() {
   const [activeCard, setActiveCard] = useState(null);
@@ -30,6 +31,14 @@ function App() {
       icon: '✅',
       description: 'Валидация VEX документов согласно стандарту CycloneDX 1.6',
       component: VEXValidator,
+      active: true
+    },
+    {
+      id: 'sbom-merger',
+      title: 'SBOM Merger',
+      icon: '🔀',
+      description: 'Объединение нескольких SBOM файлов в один для каждого проекта из ZIP архива',
+      component: SBOMMerger,
       active: true
     },
     {
