@@ -190,20 +190,24 @@ merged_sboms.zip/
         </div>
       </div>
 
-      <div className="action-buttons">
-        <button
-          onClick={handleAnalyze}
-          disabled={loading || !zipFile}
-          className="btn-secondary"
-        >
-          {loading ? 'Анализ...' : 'Анализировать'}
-        </button>
+      <div className="action-buttons" style={{ flexDirection: 'column' }}>
         <button
           onClick={handleMergeAndDownload}
           disabled={loading || !zipFile}
           className="btn-primary"
         >
           {loading ? 'Объединение...' : 'Объединить и скачать'}
+        </button>
+        <button
+          onClick={handleAnalyze}
+          disabled={loading || !zipFile}
+          className="btn-primary"
+          style={{
+            background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
+            marginTop: '10px'
+          }}
+        >
+          {loading ? 'Анализ...' : 'Анализировать (предпросмотр)'}
         </button>
       </div>
 

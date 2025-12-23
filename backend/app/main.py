@@ -1476,19 +1476,35 @@ async def sbom_merge(
             "folder_details": []
         }
 
-        # Обрабатываем папки
-        for folder_path in extract_dir.iterdir():
-            if not folder_path.is_dir():
+        # Обрабатываем папки рекурсивно
+        # Собираем все папки с JSON файлами
+        all_folders = {}
+        for json_file in extract_dir.rglob("*.json"):
+            folder_path = json_file.parent
+
+            # Пропускаем служебные папки
+            if any(part.startswith('.') or part.startswith('__') for part in folder_path.parts):
                 continue
 
-            if folder_path.name.startswith('.') or folder_path.name.startswith('__'):
-                continue
+            # Получаем относительный путь от extract_dir
+            rel_path = folder_path.relative_to(extract_dir)
+            folder_key = str(rel_path)
 
-            folder_name = folder_path.name
+            if folder_key not in all_folders:
+                all_folders[folder_key] = {
+                    "path": folder_path,
+                    "files": []
+                }
+            all_folders[folder_key]["files"].append(json_file)
+
+        # Обрабатываем каждую найденную папку
+        for folder_key, folder_info in all_folders.items():
+            folder_path = folder_info["path"]
+            json_files = folder_info["files"]
+
+            # Используем относительный путь как имя
+            folder_name = folder_key.replace('\\', '_').replace('/', '_')
             stats["total_folders"] += 1
-
-            # Находим все JSON файлы
-            json_files = list(folder_path.glob("*.json"))
 
             if len(json_files) == 0:
                 stats["skipped_folders"] += 1
@@ -1603,20 +1619,36 @@ async def sbom_merge_export(
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_dir)
 
-        # Обрабатываем папки
+        # Обрабатываем папки рекурсивно
         processed_count = 0
 
-        for folder_path in extract_dir.iterdir():
-            if not folder_path.is_dir():
+        # Собираем все папки с JSON файлами
+        all_folders = {}
+        for json_file in extract_dir.rglob("*.json"):
+            folder_path = json_file.parent
+
+            # Пропускаем служебные папки
+            if any(part.startswith('.') or part.startswith('__') for part in folder_path.parts):
                 continue
 
-            if folder_path.name.startswith('.') or folder_path.name.startswith('__'):
-                continue
+            # Получаем относительный путь от extract_dir
+            rel_path = folder_path.relative_to(extract_dir)
+            folder_key = str(rel_path)
 
-            folder_name = folder_path.name
+            if folder_key not in all_folders:
+                all_folders[folder_key] = {
+                    "path": folder_path,
+                    "files": []
+                }
+            all_folders[folder_key]["files"].append(json_file)
 
-            # Находим все JSON файлы
-            json_files = list(folder_path.glob("*.json"))
+        # Обрабатываем каждую найденную папку
+        for folder_key, folder_info in all_folders.items():
+            folder_path = folder_info["path"]
+            json_files = folder_info["files"]
+
+            # Используем относительный путь как имя
+            folder_name = folder_key.replace('\\', '_').replace('/', '_')
 
             if len(json_files) == 0:
                 continue
