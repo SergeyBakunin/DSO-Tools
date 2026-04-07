@@ -17,7 +17,7 @@ const VEXConverter = ({ onBack }) => {
   const [selectedProject, setSelectedProject] = useState('all'); // 'all' or project name
   const [loadingProjects, setLoadingProjects] = useState(false);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const API_URL = process.env.REACT_APP_API_URL || '';
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -217,6 +217,38 @@ const VEXConverter = ({ onBack }) => {
     }
   };
 
+  const handleExportXlsx = async () => {
+    if (!sbomFile) return;
+    setLoading(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append('sbom_file', sbomFile);
+    try {
+      const response = await axios.post(`${API_URL}/api/sbom-to-xlsx`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        responseType: 'blob',
+      });
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = sbomFile.name.replace('.json', '') + '_vulnerabilities.xlsx';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match?.[1]) filename = match[1].replace(/['"]/g, '').trim();
+      }
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Ошибка при экспорте в Excel');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="tool-container">
       <button onClick={onBack} className="back-button">
@@ -337,6 +369,16 @@ const VEXConverter = ({ onBack }) => {
         >
           {loading ? 'Конвертация...' : 'Конвертировать в VEX'}
         </button>
+
+        {fileType === 'json' && sbomFile && (
+          <button
+            onClick={handleExportXlsx}
+            disabled={loading}
+            className="btn-warning"
+          >
+            {loading ? '...' : '⬇ Скачать XLS с уязвимостями'}
+          </button>
+        )}
       </div>
 
       {error && (

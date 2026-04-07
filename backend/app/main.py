@@ -1,13 +1,21 @@
+import sys
+import os
+import traceback as _traceback
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import pandas as pd
 import io
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+import asyncio
 from datetime import datetime
 import uuid
+import csv as csv_module
 
 app = FastAPI(title="DevSecOps Tools")
 
@@ -417,11 +425,9 @@ def convert_sbom_to_vex(sbom_data: Dict[str, Any]) -> Dict[str, Any]:
         if "analysis" in vuln:
             vex_vuln["analysis"] = vuln["analysis"]
         else:
-            # Если анализа нет, добавляем статус по умолчанию
+            # Если анализа нет — in_triage (требует ручного разбора)
             vex_vuln["analysis"] = {
-                "state": "not_affected",
-                "justification": "component_not_present",
-                "detail": "Automated conversion from SBOM. Manual review required."
+                "state": "in_triage"
             }
 
         vex_document["vulnerabilities"].append(vex_vuln)
@@ -907,6 +913,143 @@ async def sbom_to_vex_export(
             output,
             media_type="application/json",
             headers={"Content-Disposition": f"attachment; filename={vex_filename}"}
+        )
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sbom-to-xlsx")
+async def sbom_to_xlsx(
+    sbom_file: UploadFile = File(..., description="SBOM файл в формате CycloneDX 1.6")
+):
+    """
+    Экспортирует уязвимости из CycloneDX SBOM в Excel файл для передачи командам разработки
+    """
+    try:
+        content = await sbom_file.read()
+        sbom = json.loads(content)
+
+        # Строим lookup компонентов по bom-ref
+        components_map = {}
+        for c in sbom.get("components", []):
+            ref = c.get("bom-ref") or c.get("purl") or c.get("name", "")
+            if ref:
+                components_map[ref] = c
+
+        vulns = sbom.get("vulnerabilities", [])
+
+        rows = []
+        for v in vulns:
+            cve_id = v.get("id", "")
+            description = v.get("description", "")
+            cwes = ", ".join(str(c) for c in v.get("cwes", []))
+
+            # Severity и CVSS score — предпочитаем CVSSv3
+            ratings = v.get("ratings", [])
+            rating = next((r for r in ratings if r.get("method") == "CVSSv3"), ratings[0] if ratings else None)
+            severity = (rating.get("severity") or "").capitalize() if rating else ""
+            score = str(rating.get("score", "")) if rating else ""
+            vector = rating.get("vector", "") if rating else ""
+
+            # State и Detail из analysis
+            analysis = v.get("analysis", {})
+            state = analysis.get("state", "")
+            detail = analysis.get("detail", "")
+
+            # Затронутые компоненты
+            affects = v.get("affects", [])
+            if affects:
+                for aff in affects:
+                    comp_ref = aff.get("ref", "")
+                    comp = components_map.get(comp_ref, {})
+                    comp_name = comp.get("name") or comp_ref
+                    comp_version = comp.get("version", "")
+                    rows.append({
+                        "CVE ID": cve_id,
+                        "Компонент": comp_name,
+                        "Версия": comp_version,
+                        "Severity": severity,
+                        "CVSS Score": score,
+                        "CVSS Vector": vector,
+                        "State": state,
+                        "Разметка": detail,
+                        "CWE": cwes,
+                        "Описание": description,
+                    })
+            else:
+                rows.append({
+                    "CVE ID": cve_id,
+                    "Компонент": "",
+                    "Версия": "",
+                    "Severity": severity,
+                    "CVSS Score": score,
+                    "CVSS Vector": vector,
+                    "State": state,
+                    "Разметка": detail,
+                    "CWE": cwes,
+                    "Описание": description,
+                })
+
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Уязвимости"
+
+        SEV_COLORS = {
+            "Critical": "C62828", "High": "E65100",
+            "Medium": "F9A825", "Low": "2E7D32",
+        }
+        HEADER_FILL = PatternFill("solid", fgColor="1A237E")
+        HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+        thin = Side(style="thin", color="CCCCCC")
+        BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        headers = ["CVE ID", "Компонент", "Версия", "Severity", "CVSS Score", "CVSS Vector", "CWE", "Описание", "State", "Разметка"]
+        col_widths = [18, 32, 14, 12, 12, 30, 14, 60, 16, 40]
+
+        for ci, (h, w) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=1, column=ci, value=h)
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = BORDER
+            ws.column_dimensions[get_column_letter(ci)].width = w
+
+        ws.row_dimensions[1].height = 24
+        ws.freeze_panes = "A2"
+
+        for ri, row in enumerate(rows, 2):
+            for ci, h in enumerate(headers, 1):
+                val = row.get(h, "")
+                cell = ws.cell(row=ri, column=ci, value=val)
+                cell.alignment = Alignment(vertical="top", wrap_text=(h in ("Описание", "Разметка")))
+                cell.border = BORDER
+                # Цветной бейдж для Severity
+                if h == "Severity":
+                    color = SEV_COLORS.get(val)
+                    if color:
+                        cell.fill = PatternFill("solid", fgColor=color)
+                        cell.font = Font(bold=True, color="FFFFFF")
+
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        original_name = sbom_file.filename.replace(".json", "")
+        filename = f"{original_name}_vulnerabilities.xlsx"
+
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
 
     except json.JSONDecodeError:
@@ -1817,6 +1960,458 @@ def merge_cyclonedx_sboms(sboms: list, project_name: str) -> Dict[str, Any]:
         ]
 
     return merged
+
+
+# ─────────────────────────────────────────────────────────────────
+# Vulnerability Report — Artifactory + CodeScoring integration
+# ─────────────────────────────────────────────────────────────────
+
+from vulnerability_report import (
+    check_artifactory_connection,
+    check_codescoring_connection,
+    search_artifactory_sbom,
+    get_codescoring_name_from_sbom,
+    search_codescoring_project,
+    find_analysis_by_date,
+    find_nearby_analyses,
+    download_vulnerabilities_csv,
+    find_project_group,
+    get_group_with_projects,
+)
+
+
+class Credentials(BaseModel):
+    artifactory_url: str
+    artifactory_username: str = ""
+    artifactory_password: str = ""
+    artifactory_api_key: str = ""
+    codescoring_url: str
+    codescoring_api_key: str
+
+
+def _build_cfg(creds: Credentials) -> dict:
+    return {
+        "artifactory": {
+            "url": creds.artifactory_url,
+            "username": creds.artifactory_username,
+            "password": creds.artifactory_password,
+            "api_key": creds.artifactory_api_key,
+        },
+        "codescoring": {
+            "url": creds.codescoring_url,
+            "api_key": creds.codescoring_api_key,
+        },
+    }
+
+
+class HealthCheckRequest(BaseModel):
+    credentials: Credentials
+
+
+@app.post("/api/vulnerability-report/health")
+async def vulnerability_report_health(req: HealthCheckRequest):
+    """Check connectivity to Artifactory and CodeScoring."""
+    cfg = _build_cfg(req.credentials)
+    art_status, cs_status = await asyncio.gather(
+        check_artifactory_connection(cfg),
+        check_codescoring_connection(cfg),
+    )
+    return {
+        "artifactory": art_status,
+        "codescoring": cs_status,
+    }
+
+
+class VulnerabilityReportRequest(BaseModel):
+    project_name: str
+    version: str
+    severities: List[str] = ["Critical"]
+    credentials: Credentials
+    analysis_date: Optional[str] = None   # user-selected date (single-project date suggestion)
+    selected_repo: Optional[str] = None   # full_path of repo chosen when multiple found
+
+
+async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
+    """Shared pipeline: Artifactory → CodeScoring group → combined CSV rows.
+    Returns dict with status and all pipeline data."""
+    cfg = _build_cfg(req.credentials)
+    base_art = cfg["artifactory"]["url"].rstrip("/")
+    base_cs = cfg["codescoring"]["url"].rstrip("/")
+    log = []
+
+    # Step 1: Find SBOM(s) in Artifactory
+    artifacts = await search_artifactory_sbom(req.project_name, req.version, cfg)
+
+    if len(artifacts) > 1 and not req.selected_repo:
+        log.append({
+            "step": 1,
+            "title": f"Найдено {len(artifacts)} архивов SBOM в разных репозиториях",
+            "detail": "Требуется выбор репозитория",
+            "meta": {},
+        })
+        return {"status": "repo_selection_required", "artifacts": artifacts, "pipeline_log": log}
+
+    artifact = next((a for a in artifacts if a["full_path"] == req.selected_repo), artifacts[0]) \
+        if req.selected_repo else artifacts[0]
+
+    log.append({
+        "step": 1,
+        "title": "Архив SBOM найден в Artifactory",
+        "detail": artifact["name"],
+        "meta": {
+            "path": artifact["full_path"],
+            "date": artifact["artifact_date"],
+            "url": f"{base_art}/artifactory/{artifact['full_path']}",
+        },
+    })
+
+    # Step 2: Download SBOM → get CodeScoring project name
+    cs_project_name = await get_codescoring_name_from_sbom(artifact, cfg)
+    log.append({
+        "step": 2,
+        "title": "Имя проекта из SBOM",
+        "detail": cs_project_name,
+        "meta": {},
+    })
+
+    # Step 3: Find project in CodeScoring
+    project = await search_codescoring_project(cs_project_name, cfg)
+    project_id = project.get("pk") or project["id"]
+    log.append({
+        "step": 3,
+        "title": "Проект найден в CodeScoring",
+        "detail": f"{project.get('name')} (ID: {project_id})",
+        "meta": {"url": f"{base_cs}/cabinet/sca/projects/{project_id}"},
+    })
+
+    # Step 4: Find project group
+    group_ref = await find_project_group(project_id, cfg)
+    if group_ref:
+        group = await get_group_with_projects(group_ref["pk"], group_ref["name"], cfg)
+        projects_to_scan = group["projects"]
+        log.append({
+            "step": 4,
+            "title": f"Группа проектов: {group['name']}",
+            "detail": f"{len(projects_to_scan)} проектов",
+            "meta": {"url": f"{base_cs}/cabinet/sca/project-groups/{group['pk']}/"},
+        })
+    else:
+        group = None
+        projects_to_scan = [{"pk": project_id, "name": project.get("name", cs_project_name)}]
+        log.append({
+            "step": 4,
+            "title": "Группа не найдена — используется только основной проект",
+            "detail": project.get("name", cs_project_name),
+            "meta": {},
+        })
+
+    # Step 5: Confirm target date using main project
+    # If user already picked a date (req.analysis_date) → use it directly.
+    # Otherwise check exact match for main project; if none → ask user to pick.
+    confirmed_date = req.analysis_date or None
+
+    if confirmed_date:
+        log.append({
+            "step": 5,
+            "title": f"Дата скана выбрана: {confirmed_date}",
+            "detail": "Используется выбранная дата",
+            "meta": {},
+        })
+    else:
+        artifact_date = artifact["artifact_date"]
+        try:
+            _ = await find_analysis_by_date(project_id, artifact_date, cfg)
+            confirmed_date = artifact_date
+            log.append({
+                "step": 5,
+                "title": "Дата скана совпадает с датой загрузки SBOM",
+                "detail": f"Дата: {artifact_date}",
+                "meta": {},
+            })
+        except ValueError as e:
+            if "exact_not_found" in str(e):
+                suggestions = await find_nearby_analyses(project_id, artifact_date, cfg)
+                log.append({
+                    "step": 5,
+                    "title": "Скан за дату загрузки SBOM не найден",
+                    "detail": f"Ищем ближайшие сканы вокруг {artifact_date}",
+                    "meta": {},
+                })
+                return {
+                    "status": "date_selection_required",
+                    "target_date": artifact_date,
+                    "artifact": artifact,
+                    "project": {"id": project_id, "name": project.get("name", req.project_name)},
+                    "suggestions": suggestions,
+                    "pipeline_log": log,
+                }
+            else:
+                # History endpoint unavailable — skip date check, use latest scan for all projects
+                confirmed_date = None
+                log.append({
+                    "step": 5,
+                    "title": "История сканов недоступна — используется последний скан",
+                    "detail": str(e),
+                    "meta": {},
+                })
+
+    # Step 6+: Per-project scan search and vuln download using confirmed_date
+    all_rows: list = []
+    all_fieldnames: list = []
+    project_results: list = []
+    step_num = 6
+
+    for proj in projects_to_scan:
+        pid = proj.get("pk") or proj.get("id")
+        pname = proj.get("name", str(pid))
+
+        if confirmed_date is None:
+            # History unavailable — download latest scan directly
+            try:
+                rows, fieldnames = await download_vulnerabilities_csv(pid, None, req.severities, cfg)
+                all_rows.extend(rows)
+                if fieldnames and not all_fieldnames:
+                    all_fieldnames = fieldnames
+                project_results.append({
+                    "project_id": pid, "project_name": pname, "status": "date_mismatch",
+                    "analysis_id": None, "analysis_date": "последний",
+                    "days_diff": None, "direction": None,
+                    "vulnerabilities_count": len(rows),
+                })
+                log.append({
+                    "step": step_num,
+                    "title": f"Последний скан: {pname}",
+                    "detail": f"{len(rows)} уязвимостей",
+                    "meta": {},
+                })
+            except Exception as ex:
+                project_results.append({
+                    "project_id": pid, "project_name": pname, "status": "error", "error": str(ex),
+                })
+                log.append({
+                    "step": step_num,
+                    "title": f"Ошибка при обработке: {pname}",
+                    "detail": str(ex), "meta": {},
+                })
+            step_num += 1
+            continue
+
+        try:
+            analysis = await find_analysis_by_date(pid, confirmed_date, cfg)
+            analysis_id = analysis.get("pk") or analysis.get("id")
+            analysis_date_str = (analysis.get("started_at") or confirmed_date)[:10]
+
+            rows, fieldnames = await download_vulnerabilities_csv(pid, analysis_id, req.severities, cfg)
+            all_rows.extend(rows)
+            if fieldnames and not all_fieldnames:
+                all_fieldnames = fieldnames
+
+            project_results.append({
+                "project_id": pid, "project_name": pname, "status": "ok",
+                "analysis_id": analysis_id, "analysis_date": analysis_date_str,
+                "vulnerabilities_count": len(rows),
+            })
+            log.append({
+                "step": step_num,
+                "title": f"Скан найден: {pname}",
+                "detail": f"{len(rows)} уязвимостей (дата: {analysis_date_str})",
+                "meta": {},
+            })
+            step_num += 1
+
+        except ValueError as e:
+            if "exact_not_found" in str(e):
+                # Non-blocking: use nearest scan for this project
+                nearby = await find_nearby_analyses(pid, confirmed_date, cfg)
+                if nearby:
+                    closest = nearby[0]
+                    rows, fieldnames = await download_vulnerabilities_csv(
+                        pid, closest["pk"], req.severities, cfg
+                    )
+                    all_rows.extend(rows)
+                    if fieldnames and not all_fieldnames:
+                        all_fieldnames = fieldnames
+                    direction_word = "после" if closest["direction"] == "after" else "до"
+                    project_results.append({
+                        "project_id": pid, "project_name": pname, "status": "date_mismatch",
+                        "analysis_id": closest["pk"], "analysis_date": closest["date"],
+                        "days_diff": closest["days_diff"], "direction": closest["direction"],
+                        "vulnerabilities_count": len(rows),
+                    })
+                    log.append({
+                        "step": step_num,
+                        "title": f"Ближайший скан: {pname}",
+                        "detail": (
+                            f"Расхождение {closest['days_diff']} дн. "
+                            f"({direction_word} {confirmed_date}), {len(rows)} уязвимостей"
+                        ),
+                        "meta": {},
+                    })
+                else:
+                    project_results.append({"project_id": pid, "project_name": pname, "status": "no_scan"})
+                    log.append({
+                        "step": step_num,
+                        "title": f"Скан не найден: {pname}",
+                        "detail": f"Нет сканов в диапазоне ±3 дня от {confirmed_date}",
+                        "meta": {},
+                    })
+                step_num += 1
+            else:
+                # History endpoint failed — fallback: download latest CSV without analysis filter
+                try:
+                    rows, fieldnames = await download_vulnerabilities_csv(
+                        pid, None, req.severities, cfg
+                    )
+                    all_rows.extend(rows)
+                    if fieldnames and not all_fieldnames:
+                        all_fieldnames = fieldnames
+                    project_results.append({
+                        "project_id": pid, "project_name": pname, "status": "date_mismatch",
+                        "analysis_id": None, "analysis_date": "последний",
+                        "days_diff": None, "direction": None,
+                        "vulnerabilities_count": len(rows),
+                    })
+                    log.append({
+                        "step": step_num,
+                        "title": f"Fallback — последний скан: {pname}",
+                        "detail": f"История сканов недоступна, использован последний скан. {len(rows)} уязвимостей",
+                        "meta": {},
+                    })
+                except Exception:
+                    project_results.append({
+                        "project_id": pid, "project_name": pname, "status": "error",
+                        "error": str(e),
+                    })
+                    log.append({
+                        "step": step_num,
+                        "title": f"Ошибка при обработке: {pname}",
+                        "detail": str(e),
+                        "meta": {},
+                    })
+                step_num += 1
+
+    log.append({
+        "step": step_num,
+        "title": "Уязвимости собраны",
+        "detail": (
+            f"Итого: {len(all_rows)}, проектов обработано: {len(project_results)}"
+            f" (фильтр: {', '.join(req.severities)})"
+        ),
+        "meta": {},
+    })
+
+    return {
+        "status": "ok",
+        "artifact": artifact,
+        "group": {"pk": group["pk"], "name": group["name"], "projects_count": len(group["projects"])} if group else None,
+        "project_results": project_results,
+        "rows": all_rows,
+        "fieldnames": all_fieldnames,
+        "pipeline_log": log,
+    }
+
+
+@app.post("/api/vulnerability-report/fetch")
+async def vulnerability_report_fetch(req: VulnerabilityReportRequest):
+    """
+    Fetch vulnerabilities from CodeScoring matching the Artifactory SBOM upload date.
+    Returns metadata + filtered vulnerability rows as JSON.
+    """
+    try:
+        result = await _run_report_pipeline(req)
+        status = result["status"]
+
+        if status == "repo_selection_required":
+            return {
+                "status": "repo_selection_required",
+                "artifacts": result["artifacts"],
+                "pipeline_log": result["pipeline_log"],
+            }
+
+        if status == "date_selection_required":
+            return {
+                "status": "date_selection_required",
+                "target_date": result["target_date"],
+                "artifact": result["artifact"],
+                "project": result["project"],
+                "suggestions": result["suggestions"],
+                "pipeline_log": result["pipeline_log"],
+            }
+
+        rows = result["rows"]
+        return {
+            "status": "ok",
+            "artifact": result["artifact"],
+            "group": result["group"],
+            "project_results": result["project_results"],
+            "vulnerabilities_count": len(rows),
+            "vulnerabilities": rows,
+            "no_vulns_for_severity": len(rows) == 0,
+            "pipeline_log": result["pipeline_log"],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        _traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vulnerability-report/export-csv")
+async def vulnerability_report_export_csv(req: VulnerabilityReportRequest):
+    """Download filtered vulnerability CSV."""
+    try:
+        result = await _run_report_pipeline(req)
+        rows = result.get("rows") or []
+        fieldnames = result.get("fieldnames") or []
+        out = io.StringIO()
+        writer = csv_module.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+        filename = f"{req.project_name}-{req.version}-vulnerabilities.csv"
+        return StreamingResponse(
+            io.BytesIO(out.getvalue().encode("utf-8-sig")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/vulnerability-report/export-vex")
+async def vulnerability_report_export_vex(req: VulnerabilityReportRequest):
+    """Convert filtered vulnerabilities to CycloneDX 1.6 VEX JSON and download."""
+    try:
+        result = await _run_report_pipeline(req)
+        rows = result.get("rows") or []
+        fieldnames = result.get("fieldnames") or []
+        if not rows:
+            raise ValueError("No vulnerabilities found with the selected severity filters.")
+
+        df = pd.DataFrame(rows, columns=fieldnames)
+        for col in df.columns:
+            if "score" in col.lower():
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        vex_data = convert_xlsx_to_vex(
+            df,
+            product_name=req.project_name,
+            product_version=req.version,
+        )
+        vex_data["metadata"]["tools"]["components"][0]["name"] = (
+            "DevSecOps Tools - Vulnerability Report"
+        )
+
+        filename = f"{req.project_name}-{req.version}-vex.json"
+        return StreamingResponse(
+            io.BytesIO(json.dumps(vex_data, indent=2, ensure_ascii=False).encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

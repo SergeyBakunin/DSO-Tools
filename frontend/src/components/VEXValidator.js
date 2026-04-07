@@ -7,7 +7,7 @@ const VEXValidator = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const API_URL = process.env.REACT_APP_API_URL || '';
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

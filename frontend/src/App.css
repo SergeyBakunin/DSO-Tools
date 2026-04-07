@@ -577,6 +577,29 @@
   cursor: not-allowed;
 }
 
+.btn-warning {
+  flex: 1;
+  padding: 15px 30px;
+  background: linear-gradient(135deg, #f76707 0%, #e8590c 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-warning:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(247, 103, 7, 0.4);
+}
+
+.btn-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .message {
   padding: 20px;
   border-radius: 10px;

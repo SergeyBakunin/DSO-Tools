@@ -1,20 +1,29 @@
 import React, { useState } from 'react';
 import './App.css';
-import SBOMMigrate from './components/SBOMMigrate';
 import VEXConverter from './components/VEXConverter';
 import VEXValidator from './components/VEXValidator';
 import SBOMMerger from './components/SBOMMerger';
+import VulnerabilityReport from './components/VulnerabilityReport';
+import VexTriage from './components/VexTriage';
 
 function App() {
   const [activeCard, setActiveCard] = useState(null);
 
   const tools = [
     {
-      id: 'comments-transfer',
-      title: 'Vulnerability Comments Transfer',
-      icon: '🔄',
-      description: 'Перенос комментариев между выгрузками уязвимостей. Автоматически сопоставляет CVE/CWE и проекты.',
-      component: SBOMMigrate,
+      id: 'vulnerability-report',
+      title: 'Выгрузка уязвимостей',
+      icon: '🔍',
+      description: 'Поиск уязвимостей по проекту и версии через Artifactory и CodeScoring. Экспорт CSV и VEX JSON.',
+      component: VulnerabilityReport,
+      active: true
+    },
+    {
+      id: 'vex-triage',
+      title: 'Триаж VEX',
+      icon: '🏷️',
+      description: 'Редактирование состояния уязвимостей (State, Justification, Response, Detail) в CycloneDX VEX файле.',
+      component: VexTriage,
       active: true
     },
     {
@@ -41,13 +50,6 @@ function App() {
       component: SBOMMerger,
       active: true
     },
-    {
-      id: 'gitleaks',
-      title: 'GitLeaks Scanner',
-      icon: '🔐',
-      description: 'Сканирование репозиториев на наличие утечек секретов и учётных данных',
-      active: false
-    }
   ];
 
   const handleCardClick = (tool) => {

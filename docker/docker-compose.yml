@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Backend API (FastAPI)
   backend:
@@ -7,7 +5,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: devsecops-backend
-    image: devsecops-tools-backend:1.3.0
+    image: sergeybakunin/devsecops-tools-backend:1.6.5
     ports:
       - "8000:8000"
     environment:
@@ -28,7 +26,7 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
     container_name: devsecops-frontend
-    image: devsecops-tools-frontend:1.3.0
+    image: sergeybakunin/devsecops-tools-frontend:1.6.5
     ports:
       - "3000:80"
     depends_on:
@@ -48,3 +46,4 @@ networks:
   devsecops-network:
     driver: bridge
     name: devsecops-network
+    external: false
