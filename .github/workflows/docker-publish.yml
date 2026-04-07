@@ -15,8 +15,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  BACKEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devsecops-backend
-  FRONTEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devsecops-frontend
+  BACKEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devsecops-tools-backend
+  FRONTEND_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/devsecops-tools-frontend
 
 jobs:
   build-and-push:

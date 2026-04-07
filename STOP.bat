@@ -16,7 +16,7 @@ if %errorlevel% equ 0 (
     if %errorlevel% equ 0 (
         echo [INFO] Stopping Docker containers...
         cd docker
-        docker-compose down
+        docker compose down
 
         if %errorlevel% equ 0 (
             echo.

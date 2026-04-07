@@ -24,7 +24,7 @@ if %errorlevel% equ 0 (
         REM Start application
         cd docker
         echo [START] Starting DevSecOps Tools with Docker Compose...
-        docker-compose up -d
+        docker compose up -d --no-build
 
         if %errorlevel% equ 0 (
             echo.
@@ -43,8 +43,8 @@ if %errorlevel% equ 0 (
                 echo    - http://%%a:3000
             )
             echo.
-            echo  To view logs: cd docker ^&^& docker-compose logs -f
-            echo  To stop:      cd docker ^&^& docker-compose down
+            echo  To view logs: cd docker ^&^& docker compose logs -f
+            echo  To stop:      cd docker ^&^& docker compose down
             echo ========================================================================
             echo.
 
@@ -56,7 +56,7 @@ if %errorlevel% equ 0 (
         ) else (
             echo.
             echo [ERROR] Failed to start Docker containers
-            echo [HINT] Try: docker-compose down ^&^& docker-compose up -d --build
+            echo [HINT] Try: docker compose down ^&^& docker compose up -d --no-build
         )
 
         cd ..

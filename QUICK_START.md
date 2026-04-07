@@ -1,261 +1,169 @@
-# 🚀 Быстрый старт DevSecOps Tools
-
-Запуск приложения за 3 минуты!
+# 🚀 Быстрый старт — DevSecOps Tools v1.6.5
 
 ---
 
 ## Вариант 1: Docker (рекомендуется) 🐳
 
 ### Требования:
-- Docker Desktop установлен
-- Docker Compose установлен
+- Docker Engine или Docker Desktop
 
 ### Запуск:
 
 ```bash
-# Перейдите в директорию проекта
-cd sbom-tools
+# Скачать образы
+docker pull sergeybakunin/devsecops-tools-backend:1.6.5
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
 
-# Запустите приложение
-docker-compose -f docker/docker-compose.yml up -d
+# Запустить (из папки с docker-compose.yml)
+docker compose up -d --no-build
 ```
 
 ### Проверка:
 
 ```bash
-# Проверьте статус контейнеров
 docker ps
-
-# Просмотрите логи
-docker-compose -f docker/docker-compose.yml logs -f
+# Должны быть запущены: devsecops-backend (healthy), devsecops-frontend
 ```
 
-### Готово!
-
-Откройте браузер: **http://localhost:3000**
+### Открыть в браузере: **http://localhost:3000**
 
 ### Остановка:
 
 ```bash
-docker-compose -f docker/docker-compose.yml down
+docker compose down
 ```
 
 ---
 
-## Вариант 2: Локальный запуск 💻
+## Вариант 2: Windows — START.bat 🪟
+
+```cmd
+START.bat
+```
+
+Скрипт проверит наличие Docker и запустит приложение. Браузер откроется автоматически.
+
+Остановка: `STOP.bat`
+
+---
+
+## Вариант 3: Локальный запуск 💻
 
 ### Требования:
 - Python 3.11+ (рекомендуется 3.13)
-- Node.js 18+
-- npm 10+
+- Node.js 18+, npm 10+
 
-### Шаг 1: Установка зависимостей
+### Шаг 1: Зависимости
 
-**Backend:**
 ```bash
+# Backend
 cd backend
-python -m pip install -r requirements.txt
-```
+pip install -r requirements.txt
 
-**Frontend:**
-```bash
+# Frontend
 cd frontend
 npm install
 ```
 
 ### Шаг 2: Запуск
 
-**Терминал 1 - Backend:**
 ```bash
+# Терминал 1 — Backend
 cd backend
 python -m uvicorn app.main:app --reload --port 8000
-```
 
-**Терминал 2 - Frontend:**
-```bash
+# Терминал 2 — Frontend
 cd frontend
 npm start
 ```
 
-### Готово!
-
-Откройте браузер: **http://localhost:3000**
-
-API доступен на: **http://localhost:8000**
-
-API документация: **http://localhost:8000/docs**
-
----
-
-## Вариант 3: Скрипты Windows 🪟
-
-### Автоматический запуск (самый простой!)
-
-Просто запустите:
-```cmd
-START.bat
-```
-
-Скрипт автоматически:
-- ✓ Проверит Docker и запустит в Docker (если доступен)
-- ✓ Или запустит в Windows режиме
-- ✓ Откроет браузер
-
-### Остановка:
-```cmd
-STOP.bat
-```
+Открыть: **http://localhost:3000** | API: **http://localhost:8000/docs**
 
 ---
 
 ## 🎯 Первое использование
 
-### 1. Vulnerability Comments Transfer
+### 🔍 Выгрузка уязвимостей
 
 1. Откройте http://localhost:3000
-2. Нажмите на карточку **"Vulnerability Comments Transfer"**
-3. Загрузите два файла:
-   - Старую выгрузку с комментариями (CSV или XLSX)
-   - Новую выгрузку без комментариев (CSV или XLSX)
-4. Нажмите **"Проверить миграцию"** для предпросмотра
-5. Нажмите **"Экспортировать"** для скачивания результата
+2. Нажмите **"Выгрузка уязвимостей"**
+3. Введите название проекта и версию
+4. Нажмите **"Запустить поиск"**
+5. Скачайте результат в CSV или VEX JSON
 
-### 2. Конвертер VEX
+### 🏷️ Триаж VEX
 
-1. Откройте http://localhost:3000
-2. Нажмите на карточку **"Конвертер VEX"**
-3. Загрузите файл (SBOM JSON или XLSX)
-4. Для XLSX выберите проект (или "Все проекты")
-5. Нажмите **"Анализировать"**
-6. Нажмите **"Конвертировать в VEX"** для скачивания
+1. Нажмите **"Триаж VEX"**
+2. Загрузите CycloneDX VEX JSON файл
+3. Редактируйте State / Justification / Response / Detail для уязвимостей
+4. Настройте фильтр по Severity для экспорта
+5. Нажмите **"Скачать триажированный VEX"**
 
-### 3. Валидатор VEX
+### 📋 Конвертер VEX
 
-1. Откройте http://localhost:3000
-2. Нажмите на карточку **"Валидатор VEX"**
-3. Загрузите VEX документ (JSON)
-4. Нажмите **"Валидировать VEX"**
-5. Просмотрите результаты валидации
+1. Нажмите **"Конвертер VEX"**
+2. Загрузите SBOM (JSON) или XLSX с уязвимостями
+3. **"Анализировать SBOM"** — просмотр статистики
+4. **"Конвертировать в VEX"** — скачать VEX JSON
+5. **"⬇ Скачать XLS с уязвимостями"** — Excel для команд разработки
+
+### ✅ Валидатор VEX
+
+1. Нажмите **"Валидатор VEX"**
+2. Загрузите VEX JSON документ
+3. Нажмите **"Валидировать VEX"**
+4. Просмотрите ошибки и предупреждения
+
+### 🔀 SBOM Merger
+
+1. Нажмите **"SBOM Merger"**
+2. Загрузите ZIP архив с папками, содержащими SBOM JSON файлы
+3. Нажмите **"Анализировать"** → **"Объединить и скачать"**
 
 ---
 
-## 🔧 Проверка работы
+## 🔧 Частые проблемы
 
-### Backend проверка:
+### Порт уже занят
 
 ```bash
-curl http://localhost:8000
-```
+# Linux/Mac
+lsof -i :3000
+lsof -i :8000
 
-Ожидаемый ответ:
-```json
-{
-  "message": "DevSecOps Tools API",
-  "version": "1.3.0"
-}
-```
-
-### Frontend проверка:
-
-Откройте http://localhost:3000 в браузере.
-
-Должна открыться страница с тремя карточками инструментов.
-
----
-
-## ❓ Частые проблемы
-
-### Docker: порт уже занят
-
-**Проблема:** Порт 3000 или 8000 уже используется
-
-**Решение:**
-```bash
-# Проверьте занятые порты
+# Windows
 netstat -ano | findstr :3000
-netstat -ano | findstr :8000
-
-# Остановите процессы или измените порты в docker-compose.yml
-```
-
-### Локальный запуск: ошибка импорта
-
-**Проблема:** `ModuleNotFoundError: No module named 'fastapi'`
-
-**Решение:**
-```bash
-cd backend
-python -m pip install -r requirements.txt
-```
-
-### Frontend: ошибка при npm start
-
-**Проблема:** `Error: Cannot find module...`
-
-**Решение:**
-```bash
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
-npm start
 ```
 
 ### Backend не отвечает
 
-**Проблема:** Backend запущен, но не отвечает на запросы
-
-**Решение:**
 ```bash
-# Проверьте, что backend запущен на правильном порту
-# В main.py должно быть: uvicorn.run(app, host="0.0.0.0", port=8000)
+# Проверить логи
+docker logs devsecops-backend
 
-# Проверьте логи
-cd backend
-python -m uvicorn app.main:app --reload --port 8000
+# Перезапустить
+docker compose restart backend
+```
+
+### Образ не запускается (`exec format error`)
+
+Образ собран под неправильную архитектуру. Пересоберите:
+
+```bash
+docker buildx build --platform linux/amd64 --push \
+  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
 ```
 
 ---
 
-## 📚 Дополнительная информация
+## 📚 Дополнительно
 
-- **Полная документация:** [README.md](README.md)
-- **Docker Guide:** [instructions/DOCKER_GUIDE.md](instructions/DOCKER_GUIDE.md)
-- **VEX Converter:** [instructions/VEX_CONVERTER_README.md](instructions/VEX_CONVERTER_README.md)
-- **API документация:** http://localhost:8000/docs (после запуска)
-
----
-
-## 🎉 Готово!
-
-Теперь вы можете использовать DevSecOps Tools для:
-- ✅ Переноса комментариев между выгрузками уязвимостей
-- ✅ Конвертации SBOM/XLSX в формат VEX
-- ✅ Валидации VEX документов
-
-**Версия:** 1.3.0
-**Последнее обновление:** 26 ноября 2025
+- [README.md](README.md) — полная документация
+- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — развёртывание на сервере
+- [DOCKER_GUIDE.md](instructions/DOCKER_GUIDE.md) — работа с Docker
+- [VEX_CONVERTER_README.md](instructions/VEX_CONVERTER_README.md) — Конвертер VEX API
+- **Swagger UI:** http://localhost:8000/docs
 
 ---
 
-## 🌐 Доступ из локальной сети
-
-### Быстрая настройка (Windows):
-
-1. **Узнайте IP вашего ноутбука:**
-   ```powershell
-   ipconfig
-   ```
-   Найдите **IPv4 Address** (например: 192.168.1.100)
-
-2. **Откройте Firewall (PowerShell от администратора):**
-   ```powershell
-   New-NetFirewallRule -DisplayName "DevSecOps Frontend" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
-   New-NetFirewallRule -DisplayName "DevSecOps Backend" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
-   ```
-
-3. **Подключитесь с другого устройства:**
-   ```
-   http://192.168.1.100:3000
-   ```
-
-**Подробнее:** [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+**Версия:** 1.6.5 | **Обновлено:** 07 апреля 2026
