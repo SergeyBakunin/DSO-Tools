@@ -2133,20 +2133,34 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
         except ValueError as e:
             if "exact_not_found" in str(e):
                 suggestions = await find_nearby_analyses(project_id, artifact_date, cfg)
-                log.append({
-                    "step": 5,
-                    "title": "Скан за дату загрузки SBOM не найден",
-                    "detail": f"Ищем ближайшие сканы вокруг {artifact_date}",
-                    "meta": {},
-                })
-                return {
-                    "status": "date_selection_required",
-                    "target_date": artifact_date,
-                    "artifact": artifact,
-                    "project": {"id": project_id, "name": project.get("name", req.project_name)},
-                    "suggestions": suggestions,
-                    "pipeline_log": log,
-                }
+                # Auto-pick if nearest scan is within ±3 days — no need to ask the user
+                within_3 = [s for s in suggestions if s["days_diff"] <= 3]
+                if within_3:
+                    best = within_3[0]  # sorted by days_diff ascending
+                    confirmed_date = best["date"]
+                    direction_word = "после" if best["direction"] == "after" else "до"
+                    log.append({
+                        "step": 5,
+                        "title": f"Точный скан не найден — автовыбор ближайшего ({best['days_diff']} дн. {direction_word} {artifact_date})",
+                        "detail": f"Дата скана: {confirmed_date}",
+                        "meta": {},
+                    })
+                else:
+                    # Nothing within 3 days — ask user to pick manually
+                    log.append({
+                        "step": 5,
+                        "title": f"Скан за {artifact_date} не найден",
+                        "detail": "Ближайший скан в пределах ±3 дней не найден — требуется выбор вручную",
+                        "meta": {},
+                    })
+                    return {
+                        "status": "date_selection_required",
+                        "target_date": artifact_date,
+                        "artifact": artifact,
+                        "project": {"id": project_id, "name": project.get("name", req.project_name)},
+                        "suggestions": suggestions,
+                        "pipeline_log": log,
+                    }
             else:
                 # History endpoint unavailable — skip date check, use latest scan for all projects
                 confirmed_date = None
