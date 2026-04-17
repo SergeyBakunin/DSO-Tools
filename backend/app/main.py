@@ -2165,10 +2165,9 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
 
     def _in_sbom(project_name: str) -> bool:
         """Check if a CodeScoring project is present in the SBOM components.
-        Project name format: GROUP@component-name@type or just component-name."""
-        parts = project_name.split("@")
-        candidates = [parts[1].lower()] if len(parts) >= 2 else [project_name.lower()]
-        return any(c in sbom_components for c in candidates)
+        SBOM stores full CodeScoring names like 'LAM_1@oapi-lam-backend@file'
+        directly in components[].name — so we match the full name."""
+        return project_name.lower() in sbom_components
 
     for proj in projects_to_scan:
         pid = proj.get("pk") or proj.get("id")
