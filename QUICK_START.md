@@ -1,4 +1,4 @@
-# 🚀 Быстрый старт — DevSecOps Tools v1.6.6
+# 🚀 Быстрый старт — DevSecOps Tools v1.6.7
 
 ---
 
@@ -11,8 +11,8 @@
 
 ```bash
 # Скачать образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.6
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
+docker pull sergeybakunin/devsecops-tools-backend:1.6.7
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.7
 
 # Запустить (из папки с docker-compose.yml)
 docker compose up -d --no-build
@@ -88,8 +88,10 @@ npm start
 1. Откройте http://localhost:3000
 2. Нажмите **"Выгрузка уязвимостей"**
 3. Введите название проекта и версию
-4. Нажмите **"Запустить поиск"**
-5. Скачайте результат в CSV или VEX JSON
+4. Нажмите **"Получить уязвимости"**
+5. Выберите нужные проекты чекбоксами (колонка "В SBOM" подсвечивает зелёным те, что есть в SBOM)
+6. При необходимости подтвердите дату скана (если нет скана в ±3 дня от даты SBOM)
+7. Скачайте результат в CSV или VEX JSON, либо архив SBOM из Artifactory
 
 ### 🏷️ Триаж VEX
 
@@ -151,7 +153,7 @@ docker compose restart backend
 
 ```bash
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.7 ./backend
 ```
 
 ---
@@ -166,4 +168,4 @@ docker buildx build --platform linux/amd64 --push \
 
 ---
 
-**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.7 | **Обновлено:** 17 апреля 2026

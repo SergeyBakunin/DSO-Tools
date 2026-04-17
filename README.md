@@ -2,7 +2,7 @@
 
 > Набор инструментов для работы с SBOM и управления уязвимостями
 
-![Version](https://img.shields.io/badge/version-1.6.6-blue)
+![Version](https://img.shields.io/badge/version-1.6.7-blue)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![React](https://img.shields.io/badge/react-18.2-blue)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED)
@@ -16,8 +16,8 @@
 
 ```bash
 # Скачать образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.6
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
+docker pull sergeybakunin/devsecops-tools-backend:1.6.7
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.7
 
 # Запустить
 docker compose up -d --no-build
@@ -42,6 +42,10 @@ START.bat
 
 - Поиск SBOM в Artifactory по названию проекта и версии
 - Получение истории сканов через CodeScoring API
+- Автовыбор ближайшего скана в пределах ±3 дней от даты загрузки SBOM
+- Чекбоксы выбора проектов в таблице CodeScoring — фильтрация при экспорте
+- Индикатор "В SBOM" — подсветка проектов, упомянутых в SBOM из Artifactory
+- Скачивание архива SBOM из Artifactory одной кнопкой
 - Детальный лог выполнения с возможностью скачать
 - Экспорт результатов в **CSV** и **VEX JSON**
 
@@ -95,8 +99,8 @@ START.bat
 ### Запуск готовых образов:
 
 ```bash
-docker pull sergeybakunin/devsecops-tools-backend:1.6.6
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
+docker pull sergeybakunin/devsecops-tools-backend:1.6.7
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.7
 docker compose up -d --no-build
 ```
 
@@ -105,10 +109,10 @@ docker compose up -d --no-build
 ```bash
 # amd64 для Linux серверов (buildx обязателен на ARM-хосте)
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.7 ./backend
 
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
+  -t sergeybakunin/devsecops-tools-frontend:1.6.7 ./frontend
 ```
 
 📖 Подробнее: [DOCKER_GUIDE.md](instructions/DOCKER_GUIDE.md)
@@ -126,6 +130,7 @@ docker buildx build --platform linux/amd64 --push \
 | `POST /api/vulnerability-report/fetch` | Поиск уязвимостей через Artifactory + CodeScoring |
 | `POST /api/vulnerability-report/export-csv` | Экспорт в CSV |
 | `POST /api/vulnerability-report/export-vex` | Экспорт в VEX JSON |
+| `POST /api/vulnerability-report/export-sbom` | Скачивание архива SBOM из Artifactory |
 | `POST /api/sbom-to-vex` | Анализ SBOM → статистика |
 | `POST /api/sbom-to-vex/export` | SBOM → VEX JSON файл |
 | `POST /api/sbom-to-xlsx` | SBOM/VEX → Excel с уязвимостями |
@@ -215,4 +220,4 @@ sbom-tools/
 
 ---
 
-**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.7 | **Обновлено:** 17 апреля 2026

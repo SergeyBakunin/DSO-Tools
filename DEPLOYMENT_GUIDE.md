@@ -1,4 +1,4 @@
-# Руководство по развёртыванию — DevSecOps Tools v1.6.6
+# Руководство по развёртыванию — DevSecOps Tools v1.6.7
 
 ---
 
@@ -23,11 +23,11 @@
 
 ```bash
 # Скачать образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.6
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
+docker pull sergeybakunin/devsecops-tools-backend:1.6.7
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.7
 
 # Обновить версию в docker-compose.yml
-sed -i 's/1\.[0-9]\.[0-9]/1.6.6/g' docker-compose.yml
+sed -i 's/1\.[0-9]\.[0-9]/1.6.7/g' docker-compose.yml
 
 # Запустить (без пересборки)
 docker compose up -d --no-build
@@ -49,8 +49,8 @@ docker logs devsecops-backend --tail 20
 ### Обновление до новой версии:
 
 ```bash
-docker pull sergeybakunin/devsecops-tools-backend:1.6.6
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
+docker pull sergeybakunin/devsecops-tools-backend:1.6.7
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.7
 docker compose down
 docker compose up -d --no-build
 ```
@@ -66,20 +66,20 @@ docker compose up -d --no-build
 ```bash
 # Backend
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.7 ./backend
 
 # Frontend
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
+  -t sergeybakunin/devsecops-tools-frontend:1.6.7 ./frontend
 ```
 
 ### На Linux (x86_64):
 
 ```bash
-docker build -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
-docker build -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
-docker push sergeybakunin/devsecops-tools-backend:1.6.6
-docker push sergeybakunin/devsecops-tools-frontend:1.6.6
+docker build -t sergeybakunin/devsecops-tools-backend:1.6.7 ./backend
+docker build -t sergeybakunin/devsecops-tools-frontend:1.6.7 ./frontend
+docker push sergeybakunin/devsecops-tools-backend:1.6.7
+docker push sergeybakunin/devsecops-tools-frontend:1.6.7
 ```
 
 ---
@@ -89,7 +89,7 @@ docker push sergeybakunin/devsecops-tools-frontend:1.6.6
 ```yaml
 services:
   backend:
-    image: sergeybakunin/devsecops-tools-backend:1.6.6
+    image: sergeybakunin/devsecops-tools-backend:1.6.7
     container_name: devsecops-backend
     ports:
       - "8000:8000"
@@ -106,7 +106,7 @@ services:
       start_period: 10s
 
   frontend:
-    image: sergeybakunin/devsecops-tools-frontend:1.6.6
+    image: sergeybakunin/devsecops-tools-frontend:1.6.7
     container_name: devsecops-frontend
     ports:
       - "3000:80"
@@ -238,4 +238,4 @@ docker logs devsecops-backend --tail 30
 
 ---
 
-**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.7 | **Обновлено:** 17 апреля 2026
