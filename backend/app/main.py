@@ -13,6 +13,7 @@ import json
 import os
 from typing import Dict, Any, List, Optional
 import asyncio
+import httpx
 from datetime import datetime
 import uuid
 import csv as csv_module
@@ -2410,6 +2411,50 @@ async def vulnerability_report_export_vex(req: VulnerabilityReportRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SbomDownloadRequest(BaseModel):
+    project_name: str
+    version: str
+    credentials: Credentials
+    selected_repo: Optional[str] = None   # full_path, already known after fetch
+
+
+@app.post("/api/vulnerability-report/export-sbom")
+async def vulnerability_report_export_sbom(req: SbomDownloadRequest):
+    """Download the SBOM archive (.tar.gz) directly from Artifactory."""
+    try:
+        cfg = _build_cfg(req.credentials)
+        base_url = cfg["artifactory"]["url"].rstrip("/")
+        from vulnerability_report import search_artifactory_sbom, _artifactory_headers
+
+        artifacts = await search_artifactory_sbom(req.project_name, req.version, cfg)
+        artifact = (
+            next((a for a in artifacts if a["full_path"] == req.selected_repo), artifacts[0])
+            if req.selected_repo
+            else artifacts[0]
+        )
+
+        url = f"{base_url}/artifactory/{artifact['full_path']}"
+        headers = _artifactory_headers(cfg)
+
+        async with httpx.AsyncClient(verify=False, timeout=120) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            content = resp.content
+
+        filename = artifact["name"]
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="application/gzip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
