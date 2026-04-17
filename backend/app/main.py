@@ -2028,8 +2028,9 @@ class VulnerabilityReportRequest(BaseModel):
     version: str
     severities: List[str] = ["Critical"]
     credentials: Credentials
-    analysis_date: Optional[str] = None   # user-selected date (single-project date suggestion)
-    selected_repo: Optional[str] = None   # full_path of repo chosen when multiple found
+    analysis_date: Optional[str] = None        # user-selected date (single-project date suggestion)
+    selected_repo: Optional[str] = None        # full_path of repo chosen when multiple found
+    selected_project_ids: Optional[List[int]] = None  # project IDs to include in export (None = all)
 
 
 async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
@@ -2066,12 +2067,12 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
         },
     })
 
-    # Step 2: Download SBOM → get CodeScoring project name
-    cs_project_name = await get_codescoring_name_from_sbom(artifact, cfg)
+    # Step 2: Download SBOM → get CodeScoring project name + all component names
+    cs_project_name, sbom_components = await get_codescoring_name_from_sbom(artifact, cfg)
     log.append({
         "step": 2,
         "title": "Имя проекта из SBOM",
-        "detail": cs_project_name,
+        "detail": f"{cs_project_name} ({len(sbom_components)} компонентов)",
         "meta": {},
     })
 
@@ -2162,9 +2163,20 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
     project_results: list = []
     step_num = 6
 
+    def _in_sbom(project_name: str) -> bool:
+        """Check if a CodeScoring project is present in the SBOM components.
+        Project name format: GROUP@component-name@type or just component-name."""
+        parts = project_name.split("@")
+        candidates = [parts[1].lower()] if len(parts) >= 2 else [project_name.lower()]
+        return any(c in sbom_components for c in candidates)
+
     for proj in projects_to_scan:
         pid = proj.get("pk") or proj.get("id")
         pname = proj.get("name", str(pid))
+
+        # Skip projects not in user selection (only for export calls)
+        if req.selected_project_ids is not None and pid not in req.selected_project_ids:
+            continue
 
         if confirmed_date is None:
             # History unavailable — download latest scan directly
@@ -2178,6 +2190,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                     "analysis_id": None, "analysis_date": "последний",
                     "days_diff": None, "direction": None,
                     "vulnerabilities_count": len(rows),
+                    "in_sbom": _in_sbom(pname),
                 })
                 log.append({
                     "step": step_num,
@@ -2188,6 +2201,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
             except Exception as ex:
                 project_results.append({
                     "project_id": pid, "project_name": pname, "status": "error", "error": str(ex),
+                    "in_sbom": _in_sbom(pname),
                 })
                 log.append({
                     "step": step_num,
@@ -2211,6 +2225,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                 "project_id": pid, "project_name": pname, "status": "ok",
                 "analysis_id": analysis_id, "analysis_date": analysis_date_str,
                 "vulnerabilities_count": len(rows),
+                "in_sbom": _in_sbom(pname),
             })
             log.append({
                 "step": step_num,
@@ -2238,6 +2253,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                         "analysis_id": closest["pk"], "analysis_date": closest["date"],
                         "days_diff": closest["days_diff"], "direction": closest["direction"],
                         "vulnerabilities_count": len(rows),
+                        "in_sbom": _in_sbom(pname),
                     })
                     log.append({
                         "step": step_num,
@@ -2249,7 +2265,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                         "meta": {},
                     })
                 else:
-                    project_results.append({"project_id": pid, "project_name": pname, "status": "no_scan"})
+                    project_results.append({"project_id": pid, "project_name": pname, "status": "no_scan", "in_sbom": _in_sbom(pname)})
                     log.append({
                         "step": step_num,
                         "title": f"Скан не найден: {pname}",
@@ -2271,6 +2287,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                         "analysis_id": None, "analysis_date": "последний",
                         "days_diff": None, "direction": None,
                         "vulnerabilities_count": len(rows),
+                        "in_sbom": _in_sbom(pname),
                     })
                     log.append({
                         "step": step_num,
@@ -2282,6 +2299,7 @@ async def _run_report_pipeline(req: VulnerabilityReportRequest) -> dict:
                     project_results.append({
                         "project_id": pid, "project_name": pname, "status": "error",
                         "error": str(e),
+                        "in_sbom": _in_sbom(pname),
                     })
                     log.append({
                         "step": step_num,
