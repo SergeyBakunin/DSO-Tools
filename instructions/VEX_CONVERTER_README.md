@@ -1,6 +1,6 @@
 # VEX Converter — Документация
 
-**Версия:** 1.6.5
+**Версия:** 1.6.6
 **Последнее обновление:** 2026-04-07
 
 ---
@@ -168,8 +168,8 @@ sbom-tools/
 docker compose up -d --no-build
 
 # Образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 ```
 
 **API документация (Swagger UI):** http://localhost:8000/docs
@@ -177,4 +177,4 @@ docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
 ---
 
 **Автор:** Sergey Bakunin
-**Инструмент:** DevSecOps Tools v1.6.5
+**Инструмент:** DevSecOps Tools v1.6.6

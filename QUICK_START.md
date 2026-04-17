@@ -1,4 +1,4 @@
-# 🚀 Быстрый старт — DevSecOps Tools v1.6.5
+# 🚀 Быстрый старт — DevSecOps Tools v1.6.6
 
 ---
 
@@ -11,8 +11,8 @@
 
 ```bash
 # Скачать образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 
 # Запустить (из папки с docker-compose.yml)
 docker compose up -d --no-build
@@ -151,7 +151,7 @@ docker compose restart backend
 
 ```bash
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
 ```
 
 ---
@@ -166,4 +166,4 @@ docker buildx build --platform linux/amd64 --push \
 
 ---
 
-**Версия:** 1.6.5 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026

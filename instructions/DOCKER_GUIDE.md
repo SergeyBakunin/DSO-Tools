@@ -1,6 +1,6 @@
 # Docker — Руководство по сборке и запуску
 
-**Версия:** 1.6.5 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026
 
 ---
 
@@ -19,8 +19,8 @@ docker compose version
 ## Быстрый старт — готовые образы с DockerHub
 
 ```bash
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 
 # Из папки с docker-compose.yml
 docker compose up -d --no-build
@@ -40,20 +40,20 @@ docker compose up -d --no-build
 
 ```bash
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
 
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-frontend:1.6.5 ./frontend
+  -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
 ```
 
 ### На Linux x86_64
 
 ```bash
-docker build -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
-docker build -t sergeybakunin/devsecops-tools-frontend:1.6.5 ./frontend
+docker build -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
+docker build -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
 
-docker push sergeybakunin/devsecops-tools-backend:1.6.5
-docker push sergeybakunin/devsecops-tools-frontend:1.6.5
+docker push sergeybakunin/devsecops-tools-backend:1.6.6
+docker push sergeybakunin/devsecops-tools-frontend:1.6.6
 ```
 
 ---
@@ -65,7 +65,7 @@ docker push sergeybakunin/devsecops-tools-frontend:1.6.5
 ```yaml
 services:
   backend:
-    image: sergeybakunin/devsecops-tools-backend:1.6.5
+    image: sergeybakunin/devsecops-tools-backend:1.6.6
     container_name: devsecops-backend
     ports:
       - "8000:8000"
@@ -82,7 +82,7 @@ services:
       start_period: 10s
 
   frontend:
-    image: sergeybakunin/devsecops-tools-frontend:1.6.5
+    image: sergeybakunin/devsecops-tools-frontend:1.6.6
     container_name: devsecops-frontend
     ports:
       - "3000:80"
@@ -125,8 +125,8 @@ docker compose down -v
 ## Обновление до новой версии
 
 ```bash
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 docker compose down
 docker compose up -d --no-build
 ```

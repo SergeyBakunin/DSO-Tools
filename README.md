@@ -2,7 +2,7 @@
 
 > Набор инструментов для работы с SBOM и управления уязвимостями
 
-![Version](https://img.shields.io/badge/version-1.6.5-blue)
+![Version](https://img.shields.io/badge/version-1.6.6-blue)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![React](https://img.shields.io/badge/react-18.2-blue)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED)
@@ -16,8 +16,8 @@
 
 ```bash
 # Скачать образы
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 
 # Запустить
 docker compose up -d --no-build
@@ -95,8 +95,8 @@ START.bat
 ### Запуск готовых образов:
 
 ```bash
-docker pull sergeybakunin/devsecops-tools-backend:1.6.5
-docker pull sergeybakunin/devsecops-tools-frontend:1.6.5
+docker pull sergeybakunin/devsecops-tools-backend:1.6.6
+docker pull sergeybakunin/devsecops-tools-frontend:1.6.6
 docker compose up -d --no-build
 ```
 
@@ -105,10 +105,10 @@ docker compose up -d --no-build
 ```bash
 # amd64 для Linux серверов (buildx обязателен на ARM-хосте)
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
 
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-frontend:1.6.5 ./frontend
+  -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
 ```
 
 📖 Подробнее: [DOCKER_GUIDE.md](instructions/DOCKER_GUIDE.md)
@@ -215,4 +215,4 @@ sbom-tools/
 
 ---
 
-**Версия:** 1.6.5 | **Обновлено:** 07 апреля 2026
+**Версия:** 1.6.6 | **Обновлено:** 07 апреля 2026

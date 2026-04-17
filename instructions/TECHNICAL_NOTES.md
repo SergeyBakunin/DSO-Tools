@@ -1,6 +1,6 @@
 # Технические заметки — DevSecOps Tools
 
-**Версия:** 1.6.5
+**Версия:** 1.6.6
 **Дата обновления:** 07 апреля 2026
 
 ---
@@ -63,7 +63,7 @@ async def _fetch_all_analyses(project_id, cfg, target_date_iso=None):
 
 ```bash
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
 ```
 
 **Правило:** Никогда не собирать без `--platform linux/amd64` на ARM-хосте.
@@ -123,10 +123,10 @@ default_analysis = {"state": "in_triage"}
 ```bash
 # Обязательно --platform linux/amd64 и --push
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-backend:1.6.5 ./backend
+  -t sergeybakunin/devsecops-tools-backend:1.6.6 ./backend
 
 docker buildx build --platform linux/amd64 --push \
-  -t sergeybakunin/devsecops-tools-frontend:1.6.5 ./frontend
+  -t sergeybakunin/devsecops-tools-frontend:1.6.6 ./frontend
 ```
 
 ### Запуск на сервере (без исходников)
@@ -141,8 +141,8 @@ docker compose up -d --no-build
 
 | Образ | Описание |
 |---|---|
-| `sergeybakunin/devsecops-tools-backend:1.6.5` | FastAPI + Python 3.13 |
-| `sergeybakunin/devsecops-tools-frontend:1.6.5` | React + Nginx |
+| `sergeybakunin/devsecops-tools-backend:1.6.6` | FastAPI + Python 3.13 |
+| `sergeybakunin/devsecops-tools-frontend:1.6.6` | React + Nginx |
 
 ### config.yaml
 
