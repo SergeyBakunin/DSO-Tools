@@ -97,6 +97,9 @@ test_vex_output.json
 # Local development
 *.local
 
+# Claude Code
+.claude/
+
 
 # NAS deployment artifacts
 nas-deployment/*.tar
