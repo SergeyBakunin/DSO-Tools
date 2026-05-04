@@ -2490,6 +2490,160 @@ async def vulnerability_report_export_sbom(req: SbomDownloadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─────────────────────────────────────────────────────────────────
+# FSTEC Markup — автоматическая разметка GOST:attack_surface / GOST:security_function
+# ─────────────────────────────────────────────────────────────────
+
+import re as _re
+import yaml as _yaml
+
+FSTEC_DEFAULT_RULES_YAML = """\
+rules:
+  # Компоненты безопасности — attack_surface: yes, security_function: yes
+  - pattern: "spring.security|shiro|bouncy.castle|bouncycastle|tink|bcprov|bcpkix|keycloak|oauth|jwt|nimbus|jasypt|pac4j|nimbusds"
+    attack_surface: "yes"
+    security_function: "yes"
+    comment: "Компоненты безопасности (аутентификация, криптография)"
+
+  # Сетевые серверы и клиенты
+  - pattern: "jetty|netty|undertow|tomcat|apache.httpcomponents|okhttp|httpclient|vertx.web|grpc|reactor.netty|httpcore|feign|retrofit"
+    attack_surface: "yes"
+    security_function: "no"
+    comment: "Сетевые компоненты (серверы, HTTP-клиенты)"
+
+  # Парсеры внешних данных (JSON, XML, YAML, CSV, Avro, Protobuf)
+  - pattern: "jackson|gson|fastjson|genson|moshi|json.simple|jakarta.json|javax.json|avro|protobuf|thrift|kryo|hessian|woodstox|xerces|xstream|stax|jaxb|snakeyaml|univocity|opencsv"
+    attack_surface: "yes"
+    security_function: "no"
+    comment: "Парсеры данных (JSON, XML, YAML, CSV, Avro, Protobuf)"
+
+  # Брокеры сообщений и очереди
+  - pattern: "kafka|rabbitmq|amqp|activemq|artemis|hazelcast|pulsar|nats.client"
+    attack_surface: "yes"
+    security_function: "no"
+    comment: "Брокеры сообщений и очереди"
+
+  # Координация и конфигурация
+  - pattern: "zookeeper|spring.cloud.config|consul|etcd|nacos|curator"
+    attack_surface: "yes"
+    security_function: "no"
+    comment: "Координация и конфигурация (ZooKeeper, Consul, etcd)"
+
+  # Утилиты разработки и сборки — явно no
+  - pattern: "lombok|maven.plugin|gradle.plugin|checkstyle|spotbugs|pmd|jacoco|junit|testng|mockito|assertj|hamcrest|powermock"
+    attack_surface: "no"
+    security_function: "no"
+    comment: "Утилиты разработки и сборки (не попадают в runtime)"
+"""
+
+
+def _fstec_get_prop(properties: list, name: str) -> str:
+    for p in properties:
+        if p.get("name") == name:
+            return p.get("value", "")
+    return ""
+
+
+@app.get("/api/fstec/rules")
+def fstec_get_rules():
+    return {"yaml": FSTEC_DEFAULT_RULES_YAML}
+
+
+@app.post("/api/fstec/parse")
+async def fstec_parse(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        sbom = json.loads(content)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+
+    components = []
+    for comp in sbom.get("components", []):
+        props = comp.get("properties", [])
+        attack_surface = _fstec_get_prop(props, "GOST:attack_surface") or "no"
+        security_function = _fstec_get_prop(props, "GOST:security_function") or "no"
+        components.append({
+            "name": comp.get("name", ""),
+            "version": comp.get("version", ""),
+            "group": comp.get("group", ""),
+            "purl": comp.get("purl", ""),
+            "scope": comp.get("scope", ""),
+            "env": _fstec_get_prop(props, "env"),
+            "relation": _fstec_get_prop(props, "relation"),
+            "attack_surface": attack_surface,
+            "security_function": security_function,
+            "original_attack_surface": attack_surface,
+            "original_security_function": security_function,
+            "matched_rule": "",
+            "changed": False,
+        })
+
+    meta = sbom.get("metadata", {})
+    product = meta.get("component", {})
+    return {
+        "components": components,
+        "product_name": product.get("name", ""),
+        "product_version": product.get("version", ""),
+        "total": len(components),
+    }
+
+
+class FSTECAutoMarkRequest(BaseModel):
+    components: List[Dict[str, Any]]
+    rules_yaml: str = ""
+
+
+@app.post("/api/fstec/auto-mark")
+def fstec_auto_mark(req: FSTECAutoMarkRequest):
+    rules_yaml = req.rules_yaml.strip() or FSTEC_DEFAULT_RULES_YAML
+    try:
+        parsed = _yaml.safe_load(rules_yaml)
+        rules = parsed.get("rules", [])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+
+    result = []
+    changed_count = 0
+
+    for comp in req.components:
+        comp = dict(comp)
+        match_str = " ".join([
+            comp.get("name", ""),
+            comp.get("group", ""),
+            comp.get("purl", ""),
+        ]).lower()
+
+        matched = False
+        for rule in rules:
+            pattern = rule.get("pattern", "").lower()
+            if not pattern:
+                continue
+            try:
+                if _re.search(pattern, match_str):
+                    old_as = comp.get("attack_surface", "no")
+                    old_sf = comp.get("security_function", "no")
+                    new_as = rule.get("attack_surface", old_as)
+                    new_sf = rule.get("security_function", old_sf)
+                    comp["attack_surface"] = new_as
+                    comp["security_function"] = new_sf
+                    comp["matched_rule"] = rule.get("comment", pattern)
+                    comp["changed"] = (new_as != old_as) or (new_sf != old_sf)
+                    if comp["changed"]:
+                        changed_count += 1
+                    matched = True
+                    break
+            except _re.error:
+                continue
+
+        if not matched:
+            comp.setdefault("matched_rule", "")
+            comp["changed"] = False
+
+        result.append(comp)
+
+    return {"components": result, "changed": changed_count, "total": len(result)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
