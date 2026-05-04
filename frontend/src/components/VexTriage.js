@@ -304,7 +304,7 @@ export default function VexTriage({ onBack }) {
     return (
       <div style={s.page}>
         <div style={s.headerCard}>
-          <button style={s.backBtn} onClick={onBack}>← Назад</button>
+          {onBack && <button style={s.backBtn} onClick={onBack}>← Назад</button>}
           <div style={s.titleWrap}>
             <h2 style={s.title}>Триаж VEX</h2>
             <p style={s.subtitle}>Редактирование состояния уязвимостей в CycloneDX VEX файле</p>
